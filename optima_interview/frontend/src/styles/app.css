@@ -1,0 +1,781 @@
+/* The signed-in app: page frame, lists, forms. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.page {
+  flex: 1;
+  padding-block: clamp(28px, 4.5vw, 56px) clamp(64px, 8vw, 104px);
+}
+
+.page.narrow {
+  --wrap: 760px;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 32px;
+  margin-bottom: clamp(24px, 3vw, 36px);
+}
+
+.page-head h1 {
+  font-size: clamp(1.875rem, 1.5rem + 1.5vw, 2.75rem);
+  line-height: 1.04;
+  letter-spacing: -0.032em;
+}
+
+.page-head p {
+  max-width: 42em;
+  margin-top: 10px;
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.page-head-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.page-back:hover {
+  color: var(--ink);
+}
+
+.section {
+  margin-top: clamp(36px, 5vw, 56px);
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-bottom: 12px;
+}
+
+.section-head h2,
+.section > h2 {
+  font-size: 1.25rem;
+  letter-spacing: -0.018em;
+}
+
+.section-head p {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+.stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.stack.tight {
+  gap: 10px;
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ───────── Top bar, signed in ───────── */
+.topbar-links.app-links {
+  margin-right: auto;
+}
+
+.account {
+  position: relative;
+}
+
+.account-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--r-2);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: background-color 0.15s;
+}
+
+.account-button:hover,
+.account-button[aria-expanded='true'] {
+  background: var(--wash);
+}
+
+.account-name {
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-chev {
+  color: var(--ink-3);
+}
+
+.account-burger {
+  display: none;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  display: grid;
+  width: min(280px, calc(100vw - 2 * var(--gutter)));
+  padding: 6px;
+  border-radius: var(--r-3);
+  background: var(--paper);
+  box-shadow:
+    0 0 0 1px var(--line),
+    var(--float);
+  animation: menu-in 0.16s var(--ease-out);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.menu-who {
+  display: grid;
+  gap: 1px;
+  padding: 10px 12px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.menu-who strong {
+  font-weight: 600;
+}
+
+.menu-who span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu a,
+.menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+}
+
+.menu a:hover,
+.menu button:hover {
+  background: var(--wash);
+}
+
+.menu a[aria-current='page'] {
+  background: var(--wash);
+}
+
+.menu-links {
+  display: none;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 760px) {
+  .topbar-links.app-links,
+  .account-name,
+  .account-chev {
+    display: none;
+  }
+
+  .account-burger {
+    display: block;
+  }
+
+  .account-button {
+    padding: 0 8px 0 4px;
+  }
+
+  .menu-links {
+    display: grid;
+  }
+}
+
+/* ───────── The weekly interview block ───────── */
+.start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding: clamp(20px, 3vw, 32px);
+  border-radius: var(--r-3);
+  background: var(--wash);
+}
+
+.start-text {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.start-text h2 {
+  font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+  letter-spacing: -0.02em;
+}
+
+.start-text p {
+  color: var(--ink-2);
+}
+
+/* ───────── Facts, skills, tags ───────── */
+.facts {
+  /* Each fact has a rule on its left. The list is shifted left and clipped by the same amount,
+     so the rule of whichever fact starts a line is cut off, even after wrapping. */
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  margin-left: -11px;
+  clip-path: inset(0 0 0 11px);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.facts li {
+  padding: 0 10px;
+  border-left: 1px solid var(--line-2);
+  line-height: 1.3;
+}
+
+.skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 2px 10px;
+  border-radius: var(--r-1);
+  background: var(--wash-2);
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: 1.3;
+}
+
+.chip button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 -8px 0 -2px;
+  border-radius: 4px;
+  color: var(--ink-2);
+}
+
+.chip button:hover {
+  background: var(--line-2);
+  color: var(--ink);
+}
+
+.tagbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 1px solid var(--field);
+  border-radius: var(--r-2);
+  background: var(--paper);
+  cursor: text;
+  transition: border-color 0.15s;
+}
+
+.tagbox:hover {
+  border-color: var(--ink-2);
+}
+
+.tagbox:focus-within {
+  border-color: var(--ink);
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.tagbox input {
+  flex: 1 1 120px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-size: 1rem;
+  outline: none;
+}
+
+.tagbox input::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+.tagbox-count {
+  margin-left: auto;
+  padding: 0 4px;
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  white-space: nowrap;
+}
+
+/* ───────── A text field with suggestions ───────── */
+.combo {
+  position: relative;
+}
+
+.combo-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 280px;
+  padding: 6px;
+  border-radius: var(--r-2);
+  background: var(--paper);
+  box-shadow:
+    0 0 0 1px var(--line),
+    var(--float);
+  overflow-y: auto;
+}
+
+.combo-list li {
+  padding: 9px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.combo-list li[aria-selected='true'] {
+  background: var(--wash-2);
+}
+
+/* ───────── Documents ───────── */
+.fileline {
+  display: grid;
+  gap: 12px;
+}
+
+.fileline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.fileline-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-2);
+  background: var(--wash);
+  color: var(--ink-2);
+}
+
+.fileline-text {
+  display: grid;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.fileline-text strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileline-text span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.fileline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fileline-view {
+  width: 100%;
+  height: min(70vh, 640px);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--wash);
+}
+
+.fileline-view .hint {
+  padding: 16px;
+}
+
+/* ───────── Text inside dialogs and panels ───────── */
+.plain-list {
+  display: grid;
+  gap: 10px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.plain-list li {
+  position: relative;
+  padding-left: 18px;
+}
+
+.plain-list li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.dialog-lead {
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+}
+
+.dialog-lead strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.prose {
+  max-width: 44em;
+  color: var(--ink-2);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+/* ───────── Forms ───────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.form-section + .form-section {
+  margin-top: 36px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.form-section > h2,
+.form-section > h3 {
+  margin-bottom: 4px;
+  font-size: 1.125rem;
+  letter-spacing: -0.012em;
+}
+
+.form-section > .hint {
+  margin-bottom: 18px;
+  font-size: var(--t-small);
+}
+
+.form-section > h2 + .stack,
+.form-section > h2 + .form-grid,
+.form-section > h3 + .stack,
+.form-section > h3 + .form-grid {
+  margin-top: 18px;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.input-row > span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.with-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+/* a bar that appears when there is something to save */
+.savebar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-top: 32px;
+  padding: 10px 10px 10px 18px;
+  border-radius: var(--r-3);
+  background: var(--ink);
+  color: #fff;
+  box-shadow: var(--float);
+  animation: savebar-in 0.25s var(--ease-out);
+}
+
+.savebar p {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.savebar .cluster {
+  margin-left: auto;
+}
+
+.savebar :focus-visible {
+  outline-color: #fff;
+}
+
+@keyframes savebar-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.saved-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--go);
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+/* ───────── Lists of rows that lead somewhere ───────── */
+.linkrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 20px;
+  align-items: center;
+  width: 100%;
+  padding: 16px 0;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+.linkrow-title {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.linkrow-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.linkrow-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-3);
+}
+
+.linkrow-score {
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+a.linkrow:hover .linkrow-title,
+button.linkrow:hover .linkrow-title {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+/* ───────── A list beside the thing picked from it ───────── */
+.split-view {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: start;
+}
+
+.split-detail {
+  position: sticky;
+  top: calc(var(--bar) + 24px);
+  max-height: calc(100vh - var(--bar) - 48px);
+  padding: clamp(20px, 2.4vw, 32px);
+  border-radius: var(--r-3);
+  background: var(--wash);
+  overflow-y: auto;
+}
+
+.pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 16px;
+  align-items: center;
+  width: calc(100% + 24px);
+  padding: 16px 12px;
+  margin-inline: -12px;
+  border-radius: var(--r-2);
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.pick:hover {
+  background: var(--wash);
+}
+
+.pick[aria-current='true'] {
+  background: var(--wash-2);
+}
+
+.pick[aria-current='true'] .avatar {
+  background: var(--paper);
+}
+
+.pick-title {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pick-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+@media (max-width: 980px) {
+  .split-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split-detail {
+    display: none;
+  }
+
+  .pick[aria-current='true'] {
+    background: none;
+  }
+
+  .pick[aria-current='true']:hover {
+    background: var(--wash);
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .start .btn {
+    width: 100%;
+  }
+
+  .page-head-action,
+  .page-head-action .btn {
+    width: 100%;
+  }
+}
+
+/* ───────── A label and its value, in pairs ───────── */
+.pairs {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 24px;
+}
+
+.pairs dt {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: 1.6;
+}
+
+.pairs dd {
+  line-height: 1.5;
+}
+
+/* ───────── Figures without boxes ───────── */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px clamp(28px, 5vw, 64px);
+}
+
+.figure b {
+  display: block;
+  font-size: clamp(2rem, 1.6rem + 1.6vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.figure span {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+/* ───────── Choosing the part of a picture to keep ───────── */
+.crop-area {
+  position: relative;
+  height: min(52vh, 360px);
+  border-radius: var(--r-2);
+  background: var(--ink);
+  overflow: hidden;
+}

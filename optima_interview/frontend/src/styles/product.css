@@ -1,0 +1,609 @@
+/* Pieces of the product that appear on more than one page (and on the landing page). */
+
+/* ───────── One interview question ───────── */
+.qf {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.qf-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+.qf-kind {
+  margin-left: 10px;
+}
+
+.qf-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.qf-timer.urgent {
+  color: var(--stop);
+}
+
+.qf-steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+}
+
+.qf-steps i {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+
+.qf-steps i.done {
+  background: var(--ink);
+}
+
+.qf-steps i.now {
+  background: var(--ink-3);
+}
+
+.qf-q {
+  font-size: clamp(1.25rem, 1.05rem + 0.9vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
+}
+
+.qf-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ───────── A list of roles with a score each ───────── */
+.sheet {
+  --who: minmax(150px, 260px);
+  min-width: 0;
+}
+
+.sheet-axis,
+.sheet-main {
+  display: grid;
+  grid-template-columns: var(--who) minmax(0, 1fr) 48px 96px 20px;
+  column-gap: 20px;
+  align-items: center;
+}
+
+.sheet-axis {
+  height: 28px;
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+}
+
+.sheet-scale {
+  grid-column: 2;
+  position: relative;
+  height: 100%;
+}
+
+.sheet-scale i {
+  position: absolute;
+  top: 0;
+  font-style: normal;
+  transform: translateX(-50%);
+}
+
+.sheet-scale i:first-child {
+  transform: none;
+}
+
+.sheet-scale i:last-child {
+  transform: translateX(-100%);
+}
+
+.sheet-scale i.at {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sheet-rows {
+  border-top: 1px solid var(--line);
+}
+
+.sheet-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-main {
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 0;
+  text-align: left;
+}
+
+button.sheet-main {
+  cursor: pointer;
+}
+
+.sheet-who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sheet-who strong {
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.sheet-who span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.sheet-track {
+  display: block;
+  min-width: 0;
+}
+
+.sheet-score {
+  justify-self: end;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.sheet-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sheet-state.sent {
+  color: var(--go);
+}
+
+.sheet-chev {
+  color: var(--ink-3);
+  transition: transform 0.25s var(--ease);
+}
+
+.sheet-row.open .sheet-chev {
+  transform: rotate(180deg);
+}
+
+/* on wide screens the line at 40 runs through every row */
+.sheet .scoreline .sl-at {
+  top: -28px;
+  bottom: -28px;
+}
+
+.sheet-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s var(--ease);
+}
+
+.sheet-row.open .sheet-more {
+  grid-template-rows: 1fr;
+}
+
+.sheet-more > div {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sheet-more-in {
+  padding: 4px 0 24px;
+}
+
+@media (max-width: 860px) {
+  .sheet-axis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sheet-scale {
+    grid-column: 1;
+  }
+
+  .sheet-main {
+    grid-template-columns: minmax(0, 1fr) auto 20px;
+    grid-template-areas:
+      'who score chev'
+      'track track track'
+      'state state state';
+    row-gap: 8px;
+    padding: 16px 0;
+  }
+
+  .sheet-who {
+    grid-area: who;
+  }
+
+  .sheet-track {
+    grid-area: track;
+  }
+
+  .sheet-score {
+    grid-area: score;
+  }
+
+  .sheet-state {
+    grid-area: state;
+  }
+
+  .sheet-chev {
+    grid-area: chev;
+  }
+
+  .sheet .scoreline .sl-at {
+    top: 0;
+    bottom: 0;
+  }
+}
+
+/* ───────── A match score with its four parts ───────── */
+.match-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.match-head .who {
+  display: grid;
+  gap: 2px;
+}
+
+.match-head .who strong {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.match-head .who span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.match-total {
+  font-size: 3.5rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+
+.match-sum {
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  line-height: 1.5;
+}
+
+.match-sum b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ───────── A ranked list of people ───────── */
+.people-row {
+  display: grid;
+  grid-template-columns: 20px 40px minmax(0, 1fr) minmax(60px, 132px) 32px 64px;
+  column-gap: 14px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 0;
+}
+
+.people-rank {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: 500;
+  text-align: center;
+}
+
+.people-name {
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-row > .tag {
+  justify-self: end;
+}
+
+.people-score {
+  justify-self: end;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+/* ───────── Feedback on one answer ───────── */
+.points {
+  display: grid;
+  gap: 8px;
+}
+
+.points li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: var(--t-small);
+  line-height: 1.4;
+}
+
+.points li svg {
+  margin-top: 1px;
+}
+
+.points li.hit svg {
+  color: var(--go);
+}
+
+.points li.missed {
+  color: var(--ink-3);
+}
+
+/* ───────── Product views shown as examples (landing page, sign-in pages) ───────── */
+/* a quiet surface that product views sit on */
+.stage {
+  position: relative;
+  margin: 0;
+  border-radius: var(--r-4);
+  background: var(--wash);
+}
+
+.stage-note {
+  position: absolute;
+  inset: auto 0 12px;
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  text-align: center;
+}
+
+/* a product view */
+.panel-ui {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 540px);
+  padding: clamp(18px, 2.4vw, 28px);
+  border-radius: var(--r-3);
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--line);
+  text-align: left;
+}
+
+.panel-ui .btn {
+  pointer-events: none;
+}
+
+.panel-title {
+  display: grid;
+  gap: 2px;
+}
+
+.panel-title strong {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.panel-title span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* things that appear as a view plays */
+.fade {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.35s ease,
+    transform 0.45s var(--ease-out);
+}
+
+.fade.on {
+  opacity: 1;
+  transform: none;
+}
+
+/* inside the product views */
+.demo-answer {
+  min-height: 11.2em;
+  padding: 12px 14px;
+  border: 1px solid var(--field);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.demo-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1.15em;
+  margin-left: 1px;
+  background: var(--ink);
+  vertical-align: -0.2em;
+}
+
+.panel-ui .sheet-main {
+  grid-template-columns: minmax(0, 1fr) auto 76px;
+  grid-template-areas:
+    'who score state'
+    'track track track';
+  gap: 10px 14px;
+  min-height: 0;
+  padding: 14px 0 12px;
+}
+
+.panel-ui .sheet-who {
+  grid-area: who;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+
+.panel-ui .sheet-who span {
+  white-space: nowrap;
+}
+
+.panel-ui .sheet-who strong {
+  font-size: 0.9375rem;
+}
+
+.panel-ui .sheet-track {
+  grid-area: track;
+}
+
+.panel-ui .sheet-score {
+  grid-area: score;
+  font-size: 1.25rem;
+}
+
+.panel-ui .sheet-state {
+  grid-area: state;
+  justify-self: end;
+}
+
+.panel-ui .sheet .scoreline .sl-at {
+  top: 0;
+  bottom: 0;
+}
+
+.why {
+  display: grid;
+  gap: 4px;
+}
+
+.why p {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+
+.feedback-q {
+  max-width: 17em;
+  line-height: 1.3;
+}
+
+.feedback-text {
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.feedback-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.feedback-cols > div {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.own-questions li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 14px 0;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+.own-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.own-add .input {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  color: var(--ink-3);
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 720px) {
+  .people-row {
+    grid-template-columns: 16px 32px minmax(0, 1fr) 30px auto;
+    column-gap: 10px;
+  }
+
+  .people-row .scoreline {
+    display: none;
+  }
+
+  .people-row .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .feedback-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel-ui .match-head {
+    align-items: flex-start;
+  }
+
+  .panel-ui .match-total {
+    font-size: 2.75rem;
+  }
+}
+
+
+/* ───────── The numbers under a score line ───────── */
+.lab-scale {
+  position: relative;
+  height: 22px;
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+}
+
+.lab-scale i {
+  position: absolute;
+  top: 2px;
+  font-style: normal;
+  transform: translateX(-50%);
+}
+
+.lab-scale i:first-child {
+  transform: none;
+}
+
+.lab-scale i:last-child {
+  transform: translateX(-100%);
+}
+
+.lab-scale i.at {
+  color: var(--ink);
+  font-weight: 600;
+}
+

@@ -1,0 +1,651 @@
+/* The landing page. */
+
+.display {
+  font-size: var(--t-display);
+  line-height: 0.98;
+  letter-spacing: -0.038em;
+}
+
+.lead {
+  color: var(--ink-2);
+  font-size: var(--t-lead);
+  line-height: 1.45;
+}
+
+/* ───────── Hero ───────── */
+.hero {
+  padding-top: clamp(40px, 6vw, 84px);
+  text-align: center;
+}
+
+.hero .lead {
+  text-wrap: balance;
+  max-width: 33em;
+  margin: clamp(20px, 2.4vw, 28px) auto 0;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: clamp(24px, 3vw, 36px);
+}
+
+.hero h1,
+.hero .lead,
+.hero-actions,
+.hero-sheet {
+  animation: rise 0.9s var(--ease-out) backwards;
+}
+
+.hero .lead {
+  animation-delay: 0.08s;
+}
+
+.hero-actions {
+  animation-delay: 0.16s;
+}
+
+.hero-sheet {
+  animation-delay: 0.28s;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.hero-sheet {
+  --who: minmax(180px, 300px);
+  max-width: 1040px;
+  margin: clamp(40px, 5.2vw, 72px) auto 0;
+  text-align: left;
+}
+
+.hero-sheet .sheet-main {
+  min-height: 84px;
+  border-radius: var(--r-1);
+}
+
+.hero-sheet .sheet-who strong {
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.hero-sheet .sheet-score {
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+}
+
+.hero-sheet .sheet-state {
+  font-size: 0.9375rem;
+}
+
+.hero-sheet .scoreline {
+  --dot: 16px;
+  --track: 3px;
+}
+
+.hero-sheet .scoreline .sl-at {
+  top: -31px;
+  bottom: -31px;
+  width: 1.5px;
+}
+
+.hero-sheet button.sheet-main:hover .sheet-chev {
+  color: var(--ink);
+}
+
+.hero-parts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px clamp(24px, 4vw, 56px);
+  align-items: start;
+  padding-top: 4px;
+}
+
+.hero-parts-note {
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.sheet-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 24px;
+  margin-top: 16px;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.sheet-hint {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.sheet-hint.on {
+  opacity: 1;
+}
+
+@media (max-width: 860px) {
+  .hero-sheet .scoreline .sl-at {
+    top: 0;
+    bottom: 0;
+  }
+
+  .hero-sheet .sheet-main {
+    min-height: 0;
+  }
+
+  .hero-parts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ───────── How it works: the pinned scene ───────── */
+.how {
+  margin-top: clamp(72px, 10vw, 144px);
+}
+
+.scene {
+  position: relative;
+  height: calc(var(--steps) * 85vh + 100vh);
+}
+
+.scene-pin {
+  position: sticky;
+  top: var(--bar);
+  display: grid;
+  align-items: center;
+  height: calc(100vh - var(--bar));
+}
+
+.scene-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(32px, 5vw, 88px);
+  align-items: start;
+}
+
+/* the heading keeps its place while the steps under it open and close */
+.scene-copy {
+  padding-top: clamp(12px, 5vh, 52px);
+}
+
+.scene-copy > h2,
+.steps-stack > h2 {
+  max-width: 11em;
+  font-size: var(--t-h2);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+
+.scene-steps {
+  margin-top: clamp(24px, 3.5vh, 44px);
+  border-bottom: 1px solid var(--line);
+}
+
+.scene-steps li {
+  border-top: 1px solid var(--line);
+}
+
+.scene-steps button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: baseline;
+  width: 100%;
+  padding: 16px 0;
+  color: var(--ink-3);
+  font-size: var(--t-h3);
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+  text-align: left;
+  transition: color 0.25s;
+}
+
+.scene-steps button:hover,
+.scene-steps li.on button {
+  color: var(--ink);
+}
+
+.scene-n {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.scene-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.4s var(--ease);
+}
+
+.scene-steps li.on .scene-body {
+  grid-template-rows: 1fr;
+}
+
+.scene-body > div {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scene-body p {
+  max-width: 29em;
+  padding: 0 0 20px 30px;
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.scene-stage {
+  height: min(600px, calc(100vh - var(--bar) - 72px));
+}
+
+.scene-panel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: clamp(20px, 3vw, 44px);
+  opacity: 0;
+  transform: translateY(18px) scale(0.985);
+  transition:
+    opacity 0.3s ease,
+    transform 0.55s var(--ease-out);
+  pointer-events: none;
+}
+
+.scene-panel > div {
+  display: grid;
+  justify-items: center;
+  width: 100%;
+}
+
+.scene-panel.on {
+  opacity: 1;
+  transform: none;
+}
+
+/* the same steps in a column, for narrow or short screens */
+.steps-stack ol {
+  display: grid;
+  gap: clamp(48px, 9vw, 80px);
+  margin-top: clamp(32px, 6vw, 56px);
+}
+
+.steps-stack li {
+  display: grid;
+  gap: 24px;
+}
+
+@media (min-width: 980px) {
+  .steps-stack li {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(32px, 5vw, 88px);
+    align-items: center;
+  }
+}
+
+.step-copy {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 6px 0;
+  align-items: baseline;
+}
+
+.step-copy h3 {
+  font-size: var(--t-h3);
+  letter-spacing: -0.018em;
+}
+
+.step-copy p {
+  grid-column: 2;
+  max-width: 32em;
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.steps-stack .stage,
+.split .stage {
+  display: grid;
+  justify-items: center;
+  padding: clamp(16px, 4vw, 44px) clamp(12px, 4vw, 44px) 44px;
+}
+
+.steps-stack .stage > div,
+.split .stage > div {
+  display: grid;
+  justify-items: center;
+  width: 100%;
+}
+
+/* ───────── Sections below the scene ───────── */
+.band {
+  padding-block: clamp(72px, 10vw, 144px);
+}
+
+.band-head {
+  max-width: 44em;
+  margin-bottom: clamp(32px, 5vw, 64px);
+}
+
+.band h2 {
+  font-size: var(--t-h1);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.band-head .lead,
+.lab-left .lead,
+.split-copy .lead {
+  max-width: 30em;
+  margin-top: clamp(14px, 1.8vw, 22px);
+}
+
+/* text beside a product view */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(32px, 6vw, 96px);
+  align-items: center;
+}
+
+.split.flip > .split-copy {
+  order: 2;
+}
+
+.split-copy .btn {
+  margin-top: clamp(20px, 2.6vw, 32px);
+}
+
+/* the fair-play record, live on this page */
+.leave-demo {
+  gap: 0;
+}
+
+.leave-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.leave-here {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.leave-here b {
+  margin-left: 4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.leave-rows {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 132px; /* room for four lines, so the panel keeps its size as lines arrive */
+  padding-block: 16px;
+}
+
+.leave-rows li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.4;
+  animation: rise 0.5s var(--ease-out) backwards;
+}
+
+.leave-rows svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ink-3);
+}
+
+.leave-rows li.clean svg {
+  color: var(--go);
+}
+
+.leave-rows em {
+  color: var(--ink-3);
+  font-style: normal;
+}
+
+.leave-over {
+  padding-bottom: 16px;
+  font-weight: 600;
+}
+
+.leave-try {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.leave-try .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* buttons in the other example panels are pictures of buttons; this one works */
+.leave-try .btn {
+  pointer-events: auto;
+}
+
+/* the camera coach, with a drawn figure in place of a camera */
+.coach-demo {
+  gap: 16px;
+}
+
+.coach-demo-view {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-2);
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.coach-demo-view svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.coach-demo-view line {
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.coach-demo-view .figure {
+  fill: #c5cdc7;
+  transform-box: view-box;
+  transform-origin: 200px 130px;
+  transition: transform 0.9s var(--ease-out);
+}
+
+.coach-demo-view .figure.sunk {
+  transform: translateY(44px);
+}
+
+/* the eyes: on the camera, or dropped to the screen */
+.coach-demo-view .eyes {
+  fill: var(--ink);
+  transition: transform 0.6s var(--ease-out);
+}
+
+.coach-demo-view .figure.down .eyes {
+  transform: translateY(15px);
+}
+
+/* the three lines the coach keeps up while you answer */
+.coach-demo .coach-now {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.coach-demo .coach-now > div {
+  display: grid;
+  grid-template-columns: 4.6em minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding-block: 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t-small);
+  line-height: 1.35;
+}
+
+.coach-demo .coach-now dt {
+  color: var(--ink-3);
+}
+
+.coach-demo .coach-now dd {
+  font-weight: 500;
+}
+
+.coach-demo .coach-now .ok dd {
+  color: var(--go-2);
+}
+
+.coach-demo .coach-tip {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-height: 3.1em;
+  animation: rise 0.5s 0.35s var(--ease-out) backwards;
+}
+
+.coach-demo .coach-tip strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+}
+
+.coach-demo .coach-tip span {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.coach-demo .coach-tip.fine strong {
+  color: var(--go-2);
+}
+
+.coach-demo .seg {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+}
+
+.coach-demo .seg > button {
+  padding: 0 10px;
+}
+
+/* on a phone the four examples sit two by two */
+@media (max-width: 520px) {
+  .coach-demo .seg {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* two ways in */
+.doors {
+  background: var(--ink);
+  color: #fff;
+}
+
+.doors :focus-visible {
+  outline-color: #fff;
+}
+
+.doors-in {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.door {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  align-content: start;
+  padding-block: clamp(56px, 8vw, 120px);
+}
+
+.door + .door {
+  padding-left: clamp(24px, 5vw, 72px);
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.door h2 {
+  font-size: var(--t-h1);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.door p {
+  max-width: 24em;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: var(--t-lead);
+  line-height: 1.45;
+}
+
+.door .btn {
+  margin-top: 14px;
+}
+
+.landing .foot {
+  border-top: 0;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split.flip > .split-copy {
+    order: 0;
+  }
+
+}
+
+@media (max-width: 640px) {
+  .doors-in {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .door {
+    padding-block: 48px;
+  }
+
+  .door + .door {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .hero-actions .btn {
+    flex: 1 1 100%;
+  }
+}

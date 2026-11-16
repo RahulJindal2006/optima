@@ -1,0 +1,561 @@
+/* The live interview: a quiet page with one job. */
+.iv-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.iv-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--bar);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.iv-bar .wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+}
+
+.iv-kind {
+  min-width: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iv-bar .btn {
+  margin-left: auto;
+}
+
+.iv-main {
+  flex: 1;
+  width: 100%;
+  max-width: calc(760px + 2 * var(--gutter));
+  margin-inline: auto;
+  padding: clamp(28px, 6vw, 72px) max(var(--gutter), env(safe-area-inset-right, 0px)) 120px
+    max(var(--gutter), env(safe-area-inset-left, 0px));
+}
+
+.iv-main.centered {
+  display: grid;
+  place-items: center;
+  padding-bottom: 20vh;
+}
+
+.iv-wait {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  max-width: 30em;
+}
+
+.iv-wait .spinner {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 8px;
+}
+
+.iv-wait h1,
+.iv-ready h1 {
+  font-size: clamp(1.75rem, 1.4rem + 1.6vw, 2.5rem);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+}
+
+.iv-wait p {
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.iv-wait .btn {
+  margin-top: 12px;
+}
+
+.iv-ready {
+  display: grid;
+  gap: 24px;
+  justify-items: start;
+}
+
+.iv-ready-lead {
+  margin-top: -12px;
+  color: var(--ink-2);
+  font-size: var(--t-lead);
+}
+
+.iv-options {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: 20px 0;
+  border-block: 1px solid var(--line);
+}
+
+.iv-options .check {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.iv-options .hint {
+  margin: -6px 0 0 28px;
+}
+
+/* a question */
+.iv-main .qf {
+  gap: 22px;
+}
+
+.iv-main .qf-top {
+  font-size: 0.9375rem;
+}
+
+.iv-main .qf-timer {
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+.iv-main .qf-q {
+  font-size: clamp(1.375rem, 1.1rem + 1.3vw, 2rem);
+  line-height: 1.18;
+  letter-spacing: -0.022em;
+}
+
+.iv-main .qf-foot {
+  margin-top: 6px;
+}
+
+.iv-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+.iv-answer {
+  display: grid;
+  gap: 10px;
+}
+
+.iv-answer .textarea {
+  min-height: 240px;
+  padding: 14px 16px;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.iv-answer .textarea.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.9375rem;
+  tab-size: 2;
+}
+
+.iv-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.iv-words {
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+.iv-words .muted {
+  font-weight: 400;
+}
+
+.btn.live {
+  border-color: var(--stop-line);
+  color: var(--stop);
+}
+
+.iv-rec {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stop);
+  animation: rec 1.2s ease-in-out infinite;
+}
+
+@keyframes rec {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ───────── The camera coach (practice) ───────── */
+/* On a wide screen the coach sits in a column beside the question, up near the camera. */
+.iv-main.with-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 264px;
+  justify-content: center;
+  gap: clamp(40px, 5vw, 72px);
+  max-width: calc(1080px + 2 * var(--gutter));
+}
+
+.iv-col {
+  min-width: 0;
+}
+
+.iv-rail {
+  position: sticky;
+  top: calc(var(--bar) + 28px);
+  align-self: start;
+  min-width: 0;
+}
+
+.coach {
+  display: grid;
+  gap: 14px;
+}
+
+.coach-view {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-2);
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.coach-view video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* a mirror, the way people expect to see themselves */
+}
+
+/* where the eyes belong: a third of the way down, in the middle */
+.coach-guide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.coach-guide line {
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.coach-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 21, 18, 0.4);
+  color: #fff;
+  font-size: 4.5rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.coach-tip {
+  display: grid;
+  gap: 2px;
+  min-height: 3.1em; /* the page below must not jump when a tip comes and goes */
+  align-content: start;
+}
+
+.coach-tip strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+}
+
+.coach-tip span {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1.4;
+}
+
+.coach-tip.fine strong {
+  color: var(--go-2);
+  font-size: 0.9375rem;
+}
+
+/* a new tip arrives quietly: enough to catch the eye from the answer box, no more */
+.coach.live .coach-tip {
+  animation: tip-in 0.4s var(--ease-out) backwards;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* picture put away: the camera is still read, so the video stays in the page, out of sight */
+.coach-view.tucked {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.coach {
+  position: relative;
+}
+
+.coach-hide {
+  justify-self: start;
+  padding-block: 5px;
+  margin-block: -5px;
+  font-size: var(--t-small);
+}
+
+.coach-checks {
+  display: grid;
+  gap: 12px;
+}
+
+.coach-checks li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1.4;
+}
+
+.coach-checks svg {
+  margin-top: 1px;
+  color: var(--ink-3);
+}
+
+.coach-checks li.yes svg {
+  color: var(--go);
+}
+
+.coach-checks li.unknown {
+  color: var(--ink-3);
+}
+
+.coach-checks em {
+  display: block;
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.coach-checks li.coach-sound.unknown {
+  color: var(--ink-2); /* a thing to do, not a thing that cannot be judged */
+}
+
+/* while answering: where the eyes are, how you are sitting, how you sound */
+.coach-now {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.coach-now > div {
+  display: grid;
+  grid-template-columns: 4.6em minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding-block: 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t-small);
+  line-height: 1.35;
+}
+
+.coach-now dt {
+  color: var(--ink-3);
+}
+
+.coach-now dd {
+  font-weight: 500;
+}
+
+.coach-now .ok dd {
+  color: var(--go-2);
+}
+
+.coach-now .idle dd {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.coach-private {
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  line-height: 1.4;
+}
+
+/* the offer on the ready screen */
+.iv-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.iv-offer > div {
+  flex: 1 1 18em;
+  min-width: 0;
+}
+
+.iv-offer h2 {
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.iv-offer p {
+  max-width: 34em;
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1.45;
+}
+
+.iv-go {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+/* ───────── The weekly interview: leaving is noticed ───────── */
+.no-copy .qf-top,
+.no-copy .qf-q {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* covers the question until the candidate comes back and says so */
+.iv-away {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px max(var(--gutter), env(safe-area-inset-right, 0px)) 24px max(var(--gutter), env(safe-area-inset-left, 0px));
+  background: var(--paper);
+  overflow-y: auto;
+}
+
+.iv-away > div {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  max-width: 31em;
+}
+
+.iv-away h2 {
+  font-size: clamp(1.75rem, 1.4rem + 1.6vw, 2.5rem);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+}
+
+.iv-away p {
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.iv-away .iv-away-count {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.iv-away .btn {
+  margin-top: 12px;
+}
+
+@media (max-width: 1079px) {
+  /* one column: the coach goes above the question, small, so the answer box keeps the screen */
+  .iv-main.with-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    max-width: calc(760px + 2 * var(--gutter));
+  }
+
+  .iv-rail {
+    position: static;
+    order: -1;
+    width: 100%;
+  }
+
+  .coach.setup,
+  .coach.settle {
+    max-width: 360px;
+  }
+
+  /* before the interview, the picture belongs next to the button that turned it on:
+     after the options, before Begin */
+  .iv-main.with-rail:has(.coach.setup) .iv-col,
+  .iv-main.with-rail:has(.coach.setup) .iv-ready {
+    display: contents;
+  }
+
+  .iv-main.with-rail:has(.coach.setup) .iv-rail {
+    order: 2;
+  }
+
+  .iv-main.with-rail:has(.coach.setup) .iv-go {
+    order: 3;
+  }
+
+  .coach.live {
+    grid-template-columns: 112px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .coach.live .coach-tip {
+    min-height: 0;
+  }
+
+  .coach.live .coach-private,
+  .coach.live .coach-now {
+    display: none; /* small screens keep the tip and give the rest of the space to the answer */
+  }
+
+  .coach.live.no-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .coach.live .coach-hide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .iv-main .qf-foot {
+    flex-wrap: wrap;
+  }
+
+  .iv-main .qf-foot .btn {
+    width: 100%;
+  }
+
+}

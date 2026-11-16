@@ -1,0 +1,856 @@
+/* ───────── Buttons ───────── */
+.btn {
+  --h: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--h);
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-2);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.btn:active:not([disabled]) {
+  transform: translateY(1px);
+}
+
+.btn[disabled],
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--ink);
+  color: #fff;
+}
+
+.btn.primary:hover:not([disabled]) {
+  background: #27322c;
+}
+
+.btn.secondary {
+  background: var(--paper);
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+
+.btn.secondary:hover:not([disabled]) {
+  background: var(--wash);
+  border-color: var(--field);
+}
+
+.btn.quiet {
+  color: var(--ink);
+}
+
+.btn.quiet:hover:not([disabled]) {
+  background: var(--wash);
+}
+
+.btn.danger {
+  background: var(--paper);
+  border-color: var(--stop-line);
+  color: var(--stop);
+}
+
+.btn.danger:hover:not([disabled]) {
+  background: var(--stop-wash);
+}
+
+.btn.lg {
+  --h: 48px;
+  padding: 0 22px;
+  font-size: 1rem;
+}
+
+.btn.sm {
+  --h: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.btn.block {
+  width: 100%;
+}
+
+.btn.icon-only {
+  flex: none;
+  width: var(--h);
+  padding: 0;
+}
+
+.btn > svg {
+  flex: none;
+}
+
+/* on a dark surface */
+.btn.on-dark {
+  background: #fff;
+  color: var(--ink);
+}
+
+.btn.on-dark:hover {
+  background: #e4e9e5;
+}
+
+.btn.on-dark.outline {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+.btn.on-dark.outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+}
+
+/* text links that sit in running text or lists */
+.link {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  cursor: pointer;
+  transition: text-decoration-color 0.15s;
+}
+
+.link:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* ───────── Form fields ───────── */
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > label,
+.label {
+  font-size: var(--t-small);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.label .opt {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--field);
+  border-radius: var(--r-2);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.4;
+  transition: border-color 0.15s;
+}
+
+.textarea {
+  height: auto;
+  min-height: 112px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.select {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%230e1512' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--ink-2);
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  border-color: var(--ink);
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+.input[aria-invalid='true'],
+.select[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--stop);
+}
+
+.input[disabled],
+.select[disabled],
+.textarea[disabled] {
+  background: var(--wash);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: var(--t-micro);
+  color: var(--ink-3);
+}
+
+.field-error {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: var(--t-micro);
+  color: var(--stop);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  /* taller to press than it looks: the padding is taken back by the margin, so nothing around it moves */
+  padding-block: 8px;
+  margin-block: -8px;
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+/* ───────── Segmented choice (two to four options) ───────── */
+.seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--wash-2);
+}
+
+.seg > button,
+.seg > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.seg > button:hover,
+.seg > a:hover {
+  color: var(--ink);
+}
+
+.seg > [aria-pressed='true'],
+.seg > [aria-selected='true'],
+.seg > [aria-current='page'] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+
+/* inside a form field the control is as wide as its options, not as wide as the form */
+.field > .seg {
+  justify-self: start;
+  max-width: 100%;
+}
+
+/* on a narrow phone the options share the row, and wrap if they still do not fit */
+@media (max-width: 400px) {
+  .seg {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .seg > button,
+  .seg > a {
+    flex: 1 1 auto;
+    padding: 0 9px;
+  }
+
+  .field > .seg {
+    justify-self: stretch;
+  }
+}
+
+/* ───────── Tabs (sections of one page) ───────── */
+.tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  .tabs {
+    gap: 18px;
+  }
+}
+
+.tabs > button,
+.tabs > a {
+  position: relative;
+  flex: none;
+  padding: 10px 0 12px;
+  color: var(--ink-3);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.tabs > button:hover,
+.tabs > a:hover {
+  color: var(--ink);
+}
+
+.tabs > [aria-selected='true'] {
+  color: var(--ink);
+}
+
+.tabs > [aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 2px;
+  background: var(--ink);
+}
+
+.tabs .count {
+  margin-left: 6px;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+/* ───────── Small labels for a state ───────── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--r-1);
+  background: var(--wash-2);
+  color: var(--ink-2);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tag.go {
+  background: var(--go-wash);
+  color: var(--go-2);
+}
+
+.tag.stop {
+  background: var(--stop-wash);
+  color: var(--stop);
+}
+
+.tag.line {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* ───────── Messages in the page ───────── */
+.notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--r-2);
+  background: var(--wash);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1.45;
+}
+
+.notice > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.notice strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.notice.stop {
+  background: var(--stop-wash);
+  color: var(--stop);
+}
+
+.notice.stop strong {
+  color: var(--stop);
+}
+
+.notice.go {
+  background: var(--go-wash);
+  color: var(--go-2);
+}
+
+.notice.go strong {
+  color: var(--go-2);
+}
+
+/* ───────── Lists of things, one per line ───────── */
+.rows {
+  border-top: 1px solid var(--line);
+}
+
+.rows > li,
+.rows > .row {
+  border-bottom: 1px solid var(--line);
+}
+
+/* ───────── An empty place ───────── */
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 40px 0;
+  max-width: 34em;
+}
+
+.empty h3 {
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.empty p {
+  color: var(--ink-2);
+}
+
+.empty .btn {
+  margin-top: 8px;
+}
+
+/* ───────── Waiting ───────── */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--line-2);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.btn.primary .spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+.btn .spinner {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ───────── Dialogs ───────── */
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(14, 21, 18, 0.42);
+  overflow-y: auto;
+  animation: veil-in 0.18s ease-out;
+}
+
+.dialog {
+  position: relative;
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-3);
+  background: var(--paper);
+  box-shadow: var(--float);
+  animation: dialog-in 0.24s var(--ease-out);
+}
+
+.dialog.wide {
+  width: min(100%, 720px);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 0 24px;
+}
+
+.dialog-head h2 {
+  padding-top: 4px;
+  font-size: 1.25rem;
+  letter-spacing: -0.015em;
+}
+
+.dialog-body {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@media (max-width: 560px) {
+  .veil {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .dialog,
+  .dialog.wide {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--r-3) var(--r-3) 0 0;
+  }
+
+  .dialog-foot > .btn {
+    flex: 1;
+  }
+}
+
+/* ───────── A person or a company, as initials or a picture ───────── */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--wash-2);
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.avatar.square {
+  border-radius: var(--r-2);
+}
+
+.avatar.sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.75rem;
+}
+
+.avatar.lg {
+  width: 72px;
+  height: 72px;
+  font-size: 1.375rem;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ───────── The score line: 0 to 100, with the line at 40 ───────── */
+.scoreline {
+  --v: 0;
+  --at: 40;
+  --dot: 12px;
+  --track: 2px;
+  position: relative;
+  display: block;
+  height: calc(var(--dot) + 8px);
+  min-width: 60px;
+}
+
+.scoreline > span {
+  display: block;
+}
+
+.scoreline::before,
+.scoreline .sl-fill {
+  content: '';
+  position: absolute;
+  top: calc(50% - var(--track) / 2);
+  left: 0;
+  right: 0;
+  height: var(--track);
+  border-radius: 1px;
+}
+
+.scoreline::before {
+  background: var(--line-2);
+}
+
+.scoreline .sl-fill {
+  background: var(--ink-3);
+  transform-origin: left center;
+  transform: scaleX(calc(var(--v) / 100));
+}
+
+.scoreline .sl-at {
+  /* the line a score has to reach */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--at) * 1%);
+  width: 1px;
+  background: var(--ink);
+}
+
+.scoreline .sl-run {
+  /* zero-width carrier for the dot, placed by `left` so it never widens the page */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--v) * 1%);
+  width: 0;
+  pointer-events: none;
+}
+
+.scoreline .sl-dot {
+  position: absolute;
+  top: calc(50% - var(--dot) / 2);
+  left: calc(var(--dot) / -2);
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 2px var(--ink-3);
+}
+
+.scoreline.fits .sl-fill {
+  background: var(--go);
+}
+
+.scoreline.fits .sl-dot {
+  background: var(--go);
+  box-shadow: 0 0 0 3px var(--paper);
+}
+
+.scoreline.moves .sl-fill {
+  transition: transform 0.6s var(--ease-out);
+}
+
+.scoreline.moves .sl-run {
+  transition: left 0.6s var(--ease-out);
+}
+
+/* ───────── The four parts of a match score ───────── */
+.parts {
+  display: grid;
+  gap: 14px;
+}
+
+.part {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  align-items: baseline;
+}
+
+.part-name {
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+.part-name small {
+  margin-left: 6px;
+  color: var(--ink-3);
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.part-value {
+  font-size: var(--t-small);
+  font-weight: 600;
+}
+
+.part-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--wash-2);
+  overflow: hidden;
+}
+
+.part-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink);
+  transform-origin: left center;
+  transform: scaleX(calc(var(--v, 0) / 100));
+}
+
+/* ───────── A slider with its label and value ───────── */
+.slider {
+  display: grid;
+  gap: 6px;
+}
+
+.slider label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.slider label small {
+  margin-left: 8px;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: 400;
+}
+
+.slider output {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.slider input[type='range'] {
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.slider input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--ink) calc(var(--v) * 1%), var(--line-2) calc(var(--v) * 1%));
+}
+
+.slider input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  transition: transform 0.15s var(--ease);
+}
+
+.slider input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.slider input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+
+.slider input[type='range']::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.slider input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.slider input[type='range']:focus-visible {
+  outline: none;
+}
+
+.slider input[type='range']:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.slider input[type='range']:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+

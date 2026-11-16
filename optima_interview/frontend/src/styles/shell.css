@@ -1,0 +1,126 @@
+/* The frame around every page: top bar, wordmark, footer. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+}
+
+.logo-word {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--bar);
+  background: var(--paper);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.topbar.scrolled,
+.topbar.ruled {
+  border-bottom-color: var(--line);
+}
+
+.topbar-in {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 3vw, 40px);
+  height: 100%;
+}
+
+.topbar-logo {
+  display: inline-flex;
+  border-radius: var(--r-1);
+  text-decoration: none;
+}
+
+.topbar-links {
+  display: flex;
+  gap: clamp(16px, 2.4vw, 32px);
+}
+
+.topbar-links a {
+  position: relative;
+  padding: 6px 0;
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.topbar-links a:hover,
+.topbar-links a[aria-current] {
+  color: var(--ink);
+}
+
+.topbar-links a[aria-current]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc((var(--bar) - 36px) / -2);
+  height: 2px;
+  background: var(--ink);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 860px) {
+  .topbar-links.page-links {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .topbar .logo-word {
+    display: none;
+  }
+}
+
+.foot {
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.foot-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding-block: 28px;
+}
+
+.foot-in p {
+  max-width: 44em;
+}
+
+.foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.foot-links a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.foot-links a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
