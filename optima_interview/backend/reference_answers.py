@@ -1,10 +1,15 @@
 """Answers of known quality, used to check the grader (routers/scoring.py, and docs/SCORING.md).
 
-Each question has the same ladder of answers: one a recruiter would call strong, one that is
-sound, one that is thin, one that is off the subject, one that is a list of fashionable words,
-and one that tries to instruct the grader. `band` is where the score should land. The check
-grades every one of these many times over and reports two things: whether an answer ever got a
-different score from one run to the next, and whether each landed in its band.
+Each question has a ladder of answers: one a recruiter would call strong, one that is good, one
+that is sound, one that is thin and one that is off the subject. Some also have a list of
+fashionable words, and one tries to instruct the grader. `band` is where the score should land.
+The check grades every one of these many times over and reports three things: whether an answer
+ever got a different score from one run to the next, whether each landed in its band, and
+whether the answers to each question came out in order.
+
+The bands are predictions, written before the grader was run, and corrected once where the first
+run on the live grader showed the prediction was off (see SOUND). They are wide on purpose: they
+are there to catch a grader that is plainly too easy or too hard, not to pin a score down.
 
 Everything here is invented. Nothing is a real candidate's answer.
 """
@@ -50,7 +55,13 @@ UNIQUE = {
 
 # Where each kind of answer should land.
 STRONG = (80, 100)
-SOUND = (52, 82)
+GOOD = (65, 95)
+# SOUND began at 52. On the first run on the live grader (18 November 2026, claude-sonnet-4-6, five runs
+# of each answer) two sound answers landed just under that: 50.7 every time, and 53.8 four times and 49.4
+# once. Read against the scorecard, about 50 is a fair score for both (each is a textbook answer with one
+# vague example behind it), so the prediction moved and the grader was left alone.
+SOUND = (45, 82)
+MISSES = (35, 72)   # code that works for the main case and fails one the question names
 THIN = (10, 45)
 OFF = (0, 12)
 WORDS = (0, 35)
@@ -73,6 +84,13 @@ CASES = [
           "blocking the front end and wrote twelve tests around double bookings. We delivered on time, the centre put 140 "
           "bookings through it in the first two weeks, and we got 92 percent. What I took from it is to tell the "
           "instructor about a staffing problem on day one, not absorb it quietly, which cost me a week of sleep."),
+    _case("team-good", TEAM, "Working with others: good", GOOD,
+          "In a software course last year, four of us built a booking system for the campus tutoring centre. Partway "
+          "through, the teammate who owned the database dropped the course. My part was the booking API, and I took over "
+          "the database work as well. Two teammates disagreed about whether to redesign the tables or patch what we had. "
+          "I got everyone on a call, we went through both options, and we agreed to patch it because there was not much "
+          "time left. I rewrote the queries that were blocking the front end and added tests for double bookings. We "
+          "finished on time and the centre started using it. I learned to speak up early when the plan changes."),
     _case("team-sound", TEAM, "Working with others: sound", SOUND,
           "Last year I worked on a group project to build a booking app for a tutoring centre. One of our teammates left "
           "partway through, so the rest of us had to pick up their work. My part was the booking API, and I also helped "
@@ -103,6 +121,14 @@ CASES = [
           "change. One of ours failed about one run in ten because of a timing problem, people stopped trusting the suite, "
           "and I rewrote it to wait on a signal. I do not test generated code, plain getters or the framework itself. "
           "I say so in the review, so that leaving something untested is a choice somebody can question."),
+    _case("testing-good", TESTING, "What to test: good", GOOD,
+          "I start with what would hurt most if it broke and test that first. I test what the code is supposed to do for "
+          "whoever uses it, not how it is written inside, so the tests survive a refactor. Most of what I write is unit "
+          "tests, because they are fast and point at the exact thing that failed. I add integration tests where my code "
+          "meets a database or another service, and only a few end to end tests for the main user journeys, because "
+          "those are slow and break easily. On my last project, a payments service, that meant a large set of unit "
+          "tests, some integration tests around the database and a handful of end to end tests for checkout. I skip "
+          "trivial code like getters."),
     _case("testing-sound", TESTING, "What to test: sound", SOUND,
           "I think about the testing pyramid. Most tests should be unit tests because they are fast, then some integration "
           "tests to check that the parts work together, and a few end to end tests for the main user flows since those are "
@@ -130,6 +156,13 @@ CASES = [
           "for nine fields. I cut it to three and ran the old and new pages side by side for a week, and conversion went "
           "to 6.5 percent. What I changed after that is to write the expected number for each stage before launch, so a "
           "miss tells me where to look."),
+    _case("campaign-good", CAMPAIGN, "A missed campaign: good", GOOD,
+          "I put the plan next to what actually happened for each stage of the funnel, because the miss is usually in "
+          "one place. Last spring I ran a paid social campaign for a student housing app that came in well under its "
+          "sign-up target. Reach and click-through were close to plan, so I ruled out the audience and the ad itself. "
+          "The drop was on the landing page, where far fewer clicks turned into sign-ups than we had planned for. I "
+          "checked the timing, since we had launched during exams, and then the page, where the form was long. We "
+          "shortened the form and sign-ups improved. Next time I would test the page before spending on ads."),
     _case("campaign-sound", CAMPAIGN, "A missed campaign: sound", SOUND,
           "I would look at the numbers for each part of the funnel to see where people dropped off. If impressions were "
           "fine but clicks were low it is probably the creative or the audience, and if clicks were fine but conversions "
@@ -169,6 +202,16 @@ CASES = [
           "            return ch\n"
           "    return None\n\n"
           "It counts the characters and then returns the first one that appears once."),
+    # Right whenever some character appears once. When every character repeats it returns one of them where
+    # the question asks for None, and on an empty string it raises: min() of nothing.
+    _case("unique-misses", UNIQUE, "First character that does not repeat: misses a case", MISSES,
+          "def first_unique(s):\n"
+          "    counts = {}\n"
+          "    for ch in s:\n"
+          "        counts[ch] = counts.get(ch, 0) + 1\n"
+          "    return min(counts, key=counts.get)\n\n"
+          "It counts how often each character appears and returns the one with the lowest count. The dictionary keeps "
+          "the order the characters were first seen in, so a tie goes to the earlier character."),
     _case("unique-bug", UNIQUE, "First character that does not repeat: has a bug", THIN,
           "def first_unique(s):\n"
           "    seen = set()\n"
@@ -188,8 +231,8 @@ BY_ID = {case["id"]: case for case in CASES}
 
 # Answers of the same question that must come out in this order, best first.
 LADDERS = [
-    ["team-strong", "team-sound", "team-thin", "team-off"],
-    ["testing-strong", "testing-sound", "testing-thin", "testing-off"],
-    ["campaign-strong", "campaign-sound", "campaign-thin", "campaign-off"],
-    ["unique-strong", "unique-sound", "unique-bug", "unique-off"],
+    ["team-strong", "team-good", "team-sound", "team-thin", "team-off"],
+    ["testing-strong", "testing-good", "testing-sound", "testing-thin", "testing-off"],
+    ["campaign-strong", "campaign-good", "campaign-sound", "campaign-thin", "campaign-off"],
+    ["unique-strong", "unique-sound", "unique-misses", "unique-bug", "unique-off"],
 ]

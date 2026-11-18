@@ -156,9 +156,18 @@ that cannot be rated is left out and counted, not guessed.
 - **The 100-person check.** `python consistency_check.py` runs the same answers from 100 people through the
   grader and fails if any score differs or if Claude is called for anyone after the first.
 - **The live check.** `/scoring-check` in the app (it asks for the backend's `ADMIN_KEY`). It grades reference
-  answers of known quality from scratch, as many times as asked, with the stored grade left out, and shows the
-  lowest, highest and most common score for each, and whether each lands where an answer of that quality
-  should. This is the one that tells you how steady the real model is.
+  answers of known quality from scratch, as many times as asked, with the stored grade left out. For each
+  answer it shows every score it was given and how many runs gave it, and whether it landed where an answer
+  of that quality should. For each question it shows whether the better answers always scored higher. Behind
+  each score it shows the scorecard the grader gave, and which lines changed on the runs that came out
+  differently. The whole result can be copied as text. This is the one that tells you how steady the real
+  model is.
+
+The reference answers (`backend/reference_answers.py`, all invented) are four questions with five answers
+each, from one a recruiter would call strong down to one that is off the subject: a general question every
+candidate can be asked, a software question, a marketing question and a coding question. The coding answers
+are run by the unit tests, so "works", "misses a case" and "has a bug" are facts, not opinions. There are also
+two lists of fashionable words, one answer that tells the grader to give it full marks, and one blank.
 
 ### What has been measured, and what has not
 
@@ -175,9 +184,33 @@ With the stored grade in place, 100 of 100 people who gave the same sixteen answ
 every question, the same interview score and the same match scores, and Claude was called for the first
 person only.
 
-Not measured: how often the real model disagrees with itself on a fresh grading, and whether its levels land
-where a recruiter's would. The stand-in cannot show either. Run `/scoring-check` on the live site for the
-first, and read a sample of graded answers against the level descriptions for the second.
+Measured on the live grader, once: 18 November 2026, `claude-sonnet-4-6`, rubric `2026.11-a`, three ratings a
+run. Twenty reference answers (the set as it was then), each graded from scratch five times, 285 calls:
+
+| | |
+|---|---|
+| Answers given the same score on all five runs | 18 of 20 |
+| The two that moved | A list of words: 0 four times, 5 once. A middling answer: 53.8 four times, 49.4 once |
+| Questions whose answers came out in order | 4 of 4 |
+| Strong answers | 95.6 to 100 |
+| Middling answers | 49.4 to 67.6 spoken, 80 for correct code with a one-line explanation |
+| Thin answers | 16.3 spoken, 27.5 for code with a bug |
+| Off the subject, instructing the grader, blank | 0 every time |
+| Lists of words | 0 to 5 on a question about experience, 17.6 on a question about knowledge |
+| Cost | $1.00 at list prices, about a third of a cent a call |
+
+Two middling answers landed at about 50, just under the 52 that had been predicted as the lowest a middling
+answer should get. Read against the scorecard, about 50 is a fair score for both, so the prediction was moved
+to 45 and the grader was left as it was. About 87% of the tokens sent were read back from the cache (worked out
+from the cost: the page did not show it then, and does now).
+
+Five runs of each answer is a small sample. It shows the grader is steady in the main and where it is not; it
+does not show how often a borderline answer moves.
+
+Not measured: 100 fresh gradings of one answer on the real model, how the grader treats answers between
+middling and strong (the "good" answers and the code that misses a case were added after this run), and
+whether its levels land where a recruiter's would. The first two are a run of `/scoring-check`. The third
+needs people reading graded answers against the level descriptions.
 
 ## Settings
 
@@ -195,7 +228,10 @@ All optional, on the backend:
 Calls for one weekly interview: 1 to write the questions, 3 for each answered question (48 when all sixteen
 are answered), and 6 for each open role it is matched against (3 for the answers, 3 for the profile; the
 profile's 3 are not repeated until the profile or the posting changes). Skipped questions and anything already
-in the store cost nothing. `/scoring-check` shows the tokens a run really used.
+in the store cost nothing. `/scoring-check` shows the tokens a run really used. On the first live run a grading
+call cost about a third of a cent (`claude-sonnet-4-6`, list prices, short reference answers). At that rate
+the 48 calls for sixteen answers would come to roughly 17 cents before the roles are matched. That is an
+estimate: longer answers cost more, and an interview has not been priced on the live site yet.
 
 Two things keep that cheaper and inside the API's rate limits:
 

@@ -70,7 +70,7 @@ def check_run(payload: CheckRun, x_admin_key: Optional[str] = Header(default=Non
     nothing = {"calls": 0, "input_tokens": 0, "cached_tokens": 0, "output_tokens": 0}
     if rubric.is_blank(case["answer"], case["question_type"]):
         # too short to be an answer: it scores 0 without a call, every time
-        blank = {"score": 0.0, "levels": {}, "marks": [], "manipulation": False, "agreement": 1.0, "ratings": 0}
+        blank = {"score": 0.0, "levels": {}, "marks": [], "manipulation": False, "agreement": 1.0, "ratings": 0, "card": None}
         return {"case": case["id"], "runs": [blank] * payload.runs, "used": nothing, "wait_seconds": 0}
     before = claude_client.usage()
     wait = 0.0
@@ -93,6 +93,9 @@ def check_run(payload: CheckRun, x_admin_key: Optional[str] = Header(default=Non
                 "manipulation": final["manipulation"],
                 "agreement": final["agreement"],   # how often the separate ratings agreed with the one kept
                 "ratings": final["samples"],
+                # the scorecard a candidate would be shown for this grading, and the grader's own words,
+                # so the page can say why an answer landed where it did and which line moved when one did
+                "card": shown["rubric"],
             })
     after = claude_client.usage()
     # counted across the whole server: if an interview was being scored at the same moment, its calls are in here too

@@ -73,7 +73,7 @@ The interview is then matched against each open job in the candidate's field:
 
 Only candidates who score **40% or above** appear in a company's applicant list.
 
-The full account, with the research behind it and its limits, is in [`docs/SCORING.md`](docs/SCORING.md). The site's owner can test the live grader at `/scoring-check` (it asks for the backend's `ADMIN_KEY`): it grades reference answers of known quality as many times as asked and shows whether any score moves.
+The full account, with the research behind it and its limits, is in [`docs/SCORING.md`](docs/SCORING.md). The site's owner can test the live grader at `/scoring-check` (it asks for the backend's `ADMIN_KEY`): it grades reference answers of known quality as many times as asked and shows whether any score moves, whether each lands where it should, and the scorecard behind each score.
 
 ---
 

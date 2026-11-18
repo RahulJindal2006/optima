@@ -1388,6 +1388,20 @@ a.sheet-main:hover .sheet-who strong {
   max-width: 28rem;
 }
 
+.check-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.check-all span {
+  margin-left: 6px;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
 .check-pick {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
@@ -1420,13 +1434,62 @@ a.sheet-main:hover .sheet-who strong {
   margin-top: 12px;
 }
 
-.check-verdict {
-  max-width: 44em;
+/* the result in a few lines: what was counted on the left, the count on the right */
+.check-sum {
   margin-bottom: 20px;
-  font-size: var(--t-lead);
+  border-top: 1px solid var(--line);
+}
+
+.check-sum + .notice {
+  margin-bottom: 20px;
+}
+
+.check-sum > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 24px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.check-sum dt {
+  color: var(--ink-2);
+}
+
+.check-sum dd {
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.35;
+}
+
+.check-sum .yes dd {
+  color: var(--go-2);
+}
+
+.check-sum .no dd {
+  color: var(--stop);
+}
+
+.check-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-bottom: 20px;
+}
+
+.check-copy > span {
+  color: var(--go-2);
+  font-size: var(--t-small);
+  font-weight: 500;
+}
+
+.check-copy .field {
+  flex-basis: 100%;
+}
+
+.check-copy .textarea {
+  font-size: var(--t-micro);
 }
 
 .check-table {
@@ -1436,7 +1499,7 @@ a.sheet-main:hover .sheet-who strong {
 
 .check-table table {
   width: 100%;
-  min-width: 46rem;
+  min-width: 36rem;
   border-collapse: collapse;
   font-size: var(--t-small);
 }
@@ -1452,6 +1515,11 @@ a.sheet-main:hover .sheet-who strong {
 .check-table thead th {
   color: var(--ink-3);
   font-weight: 500;
+}
+
+/* "5 of 5" stays on one line */
+.check-table td:nth-child(2) {
+  white-space: nowrap;
 }
 
 .check-table tbody th {
@@ -1471,4 +1539,52 @@ a.sheet-main:hover .sheet-who strong {
 .check-table + .hint {
   max-width: 44em;
   margin-top: 16px;
+}
+
+/* the scorecard behind each score, one answer to a line, opened on request */
+.check-behind {
+  display: grid;
+  gap: 12px;
+}
+
+.check-flag {
+  /* its own box, so the underline of the line it sits in does not run under it */
+  display: inline-block;
+  margin-left: 10px;
+  color: var(--stop);
+}
+
+.check-why {
+  display: grid;
+  gap: 14px;
+  margin: 6px 0 20px;
+}
+
+.check-q {
+  max-width: 44em;
+  font-weight: 600;
+}
+
+.check-why .answer.code {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: var(--t-micro);
+  white-space: pre-wrap;
+}
+
+.check-other {
+  max-width: 46em;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.check-other ul {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.check-other strong {
+  color: var(--ink);
+  font-weight: 600;
 }

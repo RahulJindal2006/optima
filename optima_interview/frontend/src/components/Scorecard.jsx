@@ -1,7 +1,5 @@
-import { LEVELS, LEVEL_NAME } from '../lib/score'
+import { LEVELS, LEVEL_NAME, MARK_NAME } from '../lib/score'
 import Icon from './Icon'
-
-const MARK_NAME = { covered: 'Covered', partly: 'In part', missing: 'Missing' }
 
 // 7.5 stays 7.5, 15.0 becomes 15.
 const points = (n) => (Number(n) % 1 ? Number(n).toFixed(1) : String(Number(n)))

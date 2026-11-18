@@ -2,11 +2,14 @@ import { useRef, useState } from 'react'
 import { getScoringCheck, runScoringCheck } from '../api/client'
 import AppShell, { PageHead } from '../components/AppShell'
 import { Field, Notice } from '../components/Bits'
+import Scorecard from '../components/Scorecard'
+import { LEVEL_NAME, MARK_NAME } from '../lib/score'
 import '../styles/pages.css'
 
 // For the site's owner. Grades a set of answers of known quality, many times over, on the live grader
-// (backend/routers/scoring.py), and shows whether a score ever moves and whether each lands where an answer
-// of that quality should. Every run makes real calls to Claude, so nothing starts until it is asked for.
+// (backend/routers/scoring.py), and shows whether a score ever moves, whether each lands where an answer
+// of that quality should, whether the answers to each question come out in order, and the scorecard
+// behind each score. Every run makes real calls to Claude, so nothing starts until it is asked for.
 
 const RUN_CHOICES = [5, 20, 50, 100]
 const AT_ONCE = 4 // runs asked for in one request: small enough to finish well inside a server's time limit
@@ -14,7 +17,7 @@ const AT_ONCE = 4 // runs asked for in one request: small enough to finish well 
 const FIRST = ['team-strong', 'team-thin', 'testing-sound', 'campaign-sound', 'unique-strong']
 
 // List prices in US dollars per million tokens (input, output), read from Anthropic's pricing page on
-// 17 November 2026. Only used to turn the tokens a run really used into a rough cost. Check your own invoice.
+// 17 November 2026. Only used to turn tokens into a rough cost. Check your own invoice.
 const PRICES = {
   'claude-sonnet-4-6': [3, 15],
   'claude-sonnet-5-5': [2, 10],
@@ -22,27 +25,171 @@ const PRICES = {
   'claude-opus-5-5': [4, 20],
 }
 
+// What one call used on average the first time this check ran on the live grader (18 November 2026,
+// claude-sonnet-4-6: 285 calls, 636,165 tokens in, 38,870 out, $1.00). Most of what is sent is the scorecard,
+// which is read back from the cache after the first call. Only used to say roughly what a run will cost
+// before it starts: the figure shown after a run comes from what that run really used.
+const A_CALL = { fresh: 294, cached: 1938, out: 136 }
+
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const tidy = (n) => (Number(n) % 1 ? Number(n).toFixed(1) : String(Number(n)))
-const blankRow = () => ({ scores: [], failed: 0, agree: [] })
+const count = (n) => Number(n).toLocaleString('en-CA')
+const dollars = (price, fresh, cached, out) => ((fresh + cached * 0.1) * price[0] + out * price[1]) / 1e6
+const blankRow = () => ({ scores: [], failed: 0, agree: [], kinds: {} })
+const copyOf = (row) => ({ ...row, scores: [...row.scores], agree: [...row.agree], kinds: Object.fromEntries(Object.entries(row.kinds).map(([sign, kind]) => [sign, { ...kind }])) })
+
+// One more run of an answer. Two runs are the same grading when every line of the scorecard got the same
+// level and every point the same mark: `kinds` holds each different grading once, with how often it came up.
+function record(row, run) {
+  row.scores.push(run.score)
+  if (run.ratings > 0) row.agree.push(run.agreement)
+  const sign = JSON.stringify([Object.entries(run.levels || {}).sort(), run.marks || [], Boolean(run.manipulation)])
+  if (!row.kinds[sign]) {
+    row.kinds[sign] = { times: 0, score: run.score, manipulation: Boolean(run.manipulation), unsent: run.ratings === 0, card: run.card || null }
+  }
+  row.kinds[sign].times += 1
+}
+
+// The different gradings an answer was given. First the one behind the score it got most often (`most`),
+// then the rest, the most frequent first.
+const gradings = (row, most) =>
+  Object.values(row?.kinds || {}).sort((a, b) => (b.score === most) - (a.score === most) || b.times - a.times || b.score - a.score)
 
 function summarise(row, band) {
   if (!row || row.scores.length === 0) return null
   const counts = new Map()
   for (const s of row.scores) counts.set(s, (counts.get(s) || 0) + 1)
-  const [most, times] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+  const tally = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]) // the score seen most often first
   const low = Math.min(...row.scores)
   const high = Math.max(...row.scores)
   return {
     done: row.scores.length,
     low,
     high,
-    most,
-    share: times / row.scores.length,
+    most: tally[0][0],
+    tally,
     steady: counts.size === 1,
     inBand: low >= band[0] && high <= band[1],
     agree: row.agree.length ? row.agree.reduce((a, b) => a + b, 0) / row.agree.length : null,
   }
+}
+
+// Within one question a better answer must never score below a worse one, on any run. A question is
+// judged once two or more of its answers have been run.
+function inOrder(ladders, byId) {
+  const out = { judged: 0, held: 0, broken: [] }
+  for (const ladder of ladders) {
+    const steps = ladder.map((id) => byId[id]).filter((r) => r?.sum)
+    if (steps.length < 2) continue
+    const wrong = steps.slice(1).flatMap((worse, i) => (steps[i].sum.low < worse.sum.high ? [[steps[i], worse]] : []))
+    out.judged += 1
+    if (wrong.length === 0) out.held += 1
+    out.broken.push(...wrong)
+  }
+  return out
+}
+
+// What one grading said, on one line: "answer solid | evidence partial | points covered, partly, partly, missing | clarity solid".
+function said(kind) {
+  if (kind.manipulation) return 'read as instructions aimed at the grader'
+  if (kind.unsent) return 'too short to be an answer: not sent to the grader'
+  if (!kind.card) return 'no scorecard came back with this run'
+  return kind.card.lines.map((line) => (line.points ? `points ${line.points.map((p) => p.mark).join(', ')}` : `${line.key} ${line.level}`)).join(' | ')
+}
+
+// Where another grading of the same answer parted from the usual one, as sentences.
+function differences(usual, other) {
+  if (other.manipulation !== usual.manipulation) {
+    return [other.manipulation ? 'It was read as instructions aimed at the grader.' : 'It was not read as instructions aimed at the grader.']
+  }
+  const out = []
+  for (const line of usual.card?.lines || []) {
+    const twin = (other.card?.lines || []).find((x) => x.key === line.key)
+    if (!twin) continue
+    if (line.points) {
+      line.points.forEach((point, i) => {
+        const mark = twin.points?.[i]?.mark
+        if (mark && mark !== point.mark) out.push(`“${point.text}” was marked ${MARK_NAME[mark]}, not ${MARK_NAME[point.mark]}.`)
+      })
+    } else if (twin.level !== line.level) {
+      out.push(`${line.label} was rated ${LEVEL_NAME[twin.level]}, not ${LEVEL_NAME[line.level]}.`)
+    }
+  }
+  return out
+}
+
+// The whole result as plain text, to paste somewhere it can be kept or read by someone else.
+function asText({ setup, runs, at, used, cost, results, order, steady, inBand, widest }) {
+  const finished = results.filter((r) => r.sum)
+  const head = [
+    `Optima scoring check${at ? `, ${at}` : ''}`,
+    `${setup.model}, rubric ${setup.version}, ${setup.samples} rating${setup.samples === 1 ? '' : 's'} a run, ${runs} runs for each answer`,
+    `${count(used.calls)} calls, ${count(used.input_tokens)} tokens in, ${count(used.cached_tokens)} more read from cache, ${count(used.output_tokens)} out` +
+      (cost != null ? `, about $${cost.toFixed(2)} at list prices` : ''),
+    `Same score on every run: ${steady} of ${finished.length}. Widest gap: ${tidy(widest)}. Where it should land: ${inBand} of ${finished.length}.` +
+      (order.judged ? ` In order: ${order.held} of ${order.judged} questions.` : ''),
+  ]
+  const blocks = results.map(({ item, sum, row, failed }) => {
+    const lines = [`${item.label} [${item.id}], should land ${item.band[0]} to ${item.band[1]}`]
+    if (!sum) return [...lines, failed ? `could not be graded (${failed} failed)` : 'not run'].join('\n')
+    lines.push(`scores: ${sum.tally.map(([score, times]) => `${tidy(score)} (${times})`).join(', ')}${failed ? `, ${failed} failed` : ''}`)
+    const kinds = gradings(row, sum.most)
+    for (const kind of kinds) lines.push(`${kind.times} of ${sum.done}, score ${tidy(kind.score)}: ${said(kind)}`)
+    if (sum.agree != null) lines.push(`the separate ratings agreed with the one kept on ${Math.round(sum.agree * 100)}% of lines`)
+    const words = kinds[0].card
+    if (words?.seen) lines.push(`seen: ${words.seen}`)
+    if (words?.strength) lines.push(`worked: ${words.strength}`)
+    if (words?.improve) lines.push(`would raise it: ${words.improve}`)
+    return lines.join('\n')
+  })
+  return [head.join('\n'), ...blocks].join('\n\n')
+}
+
+// One answer, opened: the question, what was answered, the scorecard it was given most often, and
+// what was different on the runs that were graded another way.
+function Behind({ item, row, most, done }) {
+  const kinds = gradings(row, most)
+  const usual = kinds[0]
+  return (
+    <div className="check-why">
+      <p className="check-q">{item.question}</p>
+      {item.answer ? (
+        item.question_type === 'code' ? (
+          <pre className="prose answer code">{item.answer}</pre>
+        ) : (
+          <p className="prose answer">{item.answer}</p>
+        )
+      ) : (
+        <p className="muted">Nothing was written.</p>
+      )}
+
+      {usual.manipulation ? (
+        <Notice icon="alert">This was read as instructions aimed at the grader, so it scored 0.</Notice>
+      ) : usual.card ? (
+        <Scorecard rubric={usual.card} />
+      ) : (
+        usual.unsent && <p className="muted">Too short to be an answer, so it scored 0 without being sent to the grader.</p>
+      )}
+
+      {kinds.length > 1 && (
+        <div className="check-other">
+          <p>
+            That is how {usual.times} of {done} runs graded it. The rest:
+          </p>
+          <ul>
+            {kinds.slice(1).map((kind, i) => (
+              <li key={i}>
+                <strong>
+                  {kind.times} of {done} scored {tidy(kind.score)}.
+                </strong>{' '}
+                {differences(usual, kind).join(' ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ScoringCheck() {
@@ -52,9 +199,11 @@ export default function ScoringCheck() {
   const [chosen, setChosen] = useState(FIRST)
   const [runs, setRuns] = useState(20)
   const [rows, setRows] = useState({})
+  const [ran, setRan] = useState({ ids: [], runs: 20, at: '' }) // what the result on the page was run with, and when it ended
   const [used, setUsed] = useState({ calls: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0 })
   const [state, setState] = useState('idle') // idle | loading | running | done | stopped
   const [waiting, setWaiting] = useState(0) // seconds Claude asked the check to hold off for, while it does
+  const [copied, setCopied] = useState({ how: '', text: '' }) // how: '' | done | byhand (the browser would not copy: the text is shown instead)
   const stop = useRef(false)
 
   const load = async (event) => {
@@ -74,16 +223,21 @@ export default function ScoringCheck() {
   const cases = setup?.cases || []
   const picked = cases.filter((c) => chosen.includes(c.id))
   const calls = picked.reduce((sum, c) => sum + c.calls * runs, 0)
+  const price = PRICES[setup?.model]
+  const likely = price && calls > 0 ? dollars(price, A_CALL.fresh * calls, A_CALL.cached * calls, A_CALL.out * calls) : null
 
   const toggle = (id) => setChosen((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
 
   const start = async () => {
     stop.current = false
     setProblem('')
+    setCopied({ how: '', text: '' })
     setRows({})
+    setRan({ ids: picked.map((c) => c.id), runs, at: '' })
     setUsed({ calls: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0 })
     setState('running')
     const totals = {}
+    const show = () => setRows(Object.fromEntries(Object.entries(totals).map(([id, row]) => [id, copyOf(row)])))
     try {
       for (const item of picked) {
         totals[item.id] = blankRow()
@@ -92,12 +246,9 @@ export default function ScoringCheck() {
           const reply = await runScoringCheck(key.trim(), { case: item.id, runs: Math.min(AT_ONCE, left) })
           for (const run of reply.runs) {
             if (!run) totals[item.id].failed += 1
-            else {
-              totals[item.id].scores.push(run.score)
-              if (run.ratings > 0) totals[item.id].agree.push(run.agreement)
-            }
+            else record(totals[item.id], run)
           }
-          setRows({ ...totals, [item.id]: { ...totals[item.id] } })
+          show()
           setUsed((was) => Object.fromEntries(Object.keys(was).map((k) => [k, was[k] + (reply.used?.[k] || 0)])))
           // a rate limit says nothing about the grader: wait as long as Claude asked, then carry on with the runs left
           if (reply.wait_seconds > 0 && !stop.current) {
@@ -116,16 +267,30 @@ export default function ScoringCheck() {
       setState('stopped')
     }
     setWaiting(0)
+    setRan((was) => ({ ...was, at: new Date().toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }) }))
   }
 
-  const results = picked.map((c) => ({ item: c, sum: summarise(rows[c.id], c.band), failed: rows[c.id]?.failed || 0 }))
+  // the result stays as it was run, whatever is ticked or chosen afterwards
+  const results = cases
+    .filter((c) => ran.ids.includes(c.id))
+    .map((c) => ({ item: c, row: rows[c.id], sum: summarise(rows[c.id], c.band), failed: rows[c.id]?.failed || 0 }))
   const finished = results.filter((r) => r.sum)
   const steady = finished.filter((r) => r.sum.steady).length
   const inBand = finished.filter((r) => r.sum.inBand).length
   const widest = finished.reduce((gap, r) => Math.max(gap, r.sum.high - r.sum.low), 0)
-  const price = PRICES[setup?.model]
-  const cost = price ? ((used.input_tokens + used.cached_tokens * 0.1) * price[0] + used.output_tokens * price[1]) / 1e6 : null
+  const order = inOrder(setup?.ladders || [], Object.fromEntries(results.map((r) => [r.item.id, r])))
+  const cost = price ? dollars(price, used.input_tokens, used.cached_tokens, used.output_tokens) : null
   const busy = state === 'running'
+
+  const copy = async () => {
+    const text = asText({ setup, runs: ran.runs, at: ran.at, used, cost, results, order, steady, inBand, widest })
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied({ how: 'done', text })
+    } catch {
+      setCopied({ how: 'byhand', text })
+    }
+  }
 
   return (
     <AppShell narrow>
@@ -163,6 +328,17 @@ export default function ScoringCheck() {
                 {setup.model}, rubric {setup.version}, each answer rated {setup.samples === 1 ? 'once' : `${setup.samples} times`} a run
               </p>
             </div>
+            <div className="check-all">
+              <button type="button" className="btn secondary sm" onClick={() => setChosen(cases.map((c) => c.id))} disabled={busy || picked.length === cases.length}>
+                Tick all
+              </button>
+              <button type="button" className="btn secondary sm" onClick={() => setChosen([])} disabled={busy || picked.length === 0}>
+                Clear
+              </button>
+              <span>
+                {picked.length} of {cases.length} ticked
+              </span>
+            </div>
             <ul className="check-pick">
               {cases.map((c) => (
                 <li key={c.id}>
@@ -199,8 +375,8 @@ export default function ScoringCheck() {
               )}
             </div>
             <p className="hint">
-              This will make {calls.toLocaleString('en-CA')} calls to Claude, and each one is charged to your Anthropic account.
-              Nothing is stored: every run grades from scratch.
+              This will make {count(calls)} calls to Claude{likely != null && `, about $${likely.toFixed(2)} at list prices`}, charged to
+              your Anthropic account. Nothing is stored: every run grades from scratch.
             </p>
           </section>
 
@@ -209,8 +385,8 @@ export default function ScoringCheck() {
               <div className="section-head">
                 <h2>{busy ? 'Running' : state === 'done' ? 'Result' : 'Stopped part-way'}</h2>
                 <p>
-                  {used.calls.toLocaleString('en-CA')} calls, {(used.input_tokens + used.cached_tokens).toLocaleString('en-CA')} tokens in,{' '}
-                  {used.output_tokens.toLocaleString('en-CA')} out
+                  {count(used.calls)} calls, {count(used.input_tokens + used.cached_tokens)} tokens in
+                  {used.cached_tokens > 0 && ` (${count(used.cached_tokens)} from cache)`}, {count(used.output_tokens)} out
                   {cost != null && used.calls > 0 && `, about $${cost.toFixed(2)} at list prices`}
                 </p>
               </div>
@@ -222,11 +398,54 @@ export default function ScoringCheck() {
               )}
 
               {finished.length > 0 && (
-                <p className={`check-verdict ${steady === finished.length ? 'ok' : ''}`}>
-                  {steady} of {finished.length} answers got the same score on every run.{' '}
-                  {widest > 0 ? `The widest gap between two runs of one answer was ${tidy(widest)} points.` : 'No score moved.'}{' '}
-                  {inBand} of {finished.length} stayed where an answer of that quality should land.
-                </p>
+                <dl className="check-sum">
+                  <div className={steady === finished.length ? 'yes' : 'no'}>
+                    <dt>Same score on every run</dt>
+                    <dd>
+                      {steady} of {finished.length} answers
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Widest gap between two runs of one answer</dt>
+                    <dd>{widest > 0 ? `${tidy(widest)} ${tidy(widest) === '1' ? 'point' : 'points'}` : 'None'}</dd>
+                  </div>
+                  <div className={inBand === finished.length ? 'yes' : 'no'}>
+                    <dt>Landed where an answer of that quality should</dt>
+                    <dd>
+                      {inBand} of {finished.length} answers
+                    </dd>
+                  </div>
+                  {order.judged > 0 && (
+                    <div className={order.held === order.judged ? 'yes' : 'no'}>
+                      <dt>Better answers never scored below worse ones</dt>
+                      <dd>
+                        {order.held} of {order.judged} {order.judged === 1 ? 'question' : 'questions'}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+
+              {order.broken.length > 0 && (
+                <Notice tone="stop" title="Out of order.">
+                  {order.broken
+                    .map(([better, worse]) => `“${worse.item.label}” scored as high as ${tidy(worse.sum.high)} and “${better.item.label}” as low as ${tidy(better.sum.low)}.`)
+                    .join(' ')}
+                </Notice>
+              )}
+
+              {finished.length > 0 && !busy && (
+                <div className="check-copy">
+                  <button type="button" className="btn secondary sm" onClick={copy}>
+                    Copy the result as text
+                  </button>
+                  <span role="status">{copied.how === 'done' && 'Copied.'}</span>
+                  {copied.how === 'byhand' && (
+                    <Field label="Your browser would not copy it. Select this and copy it yourself." htmlFor="check-text">
+                      <textarea id="check-text" className="textarea" rows={8} readOnly value={copied.text} onFocus={(event) => event.target.select()} />
+                    </Field>
+                  )}
+                </div>
               )}
 
               <div className="check-table" role="region" aria-label="Results, one row for each answer" tabIndex={0}>
@@ -235,9 +454,7 @@ export default function ScoringCheck() {
                     <tr>
                       <th scope="col">Answer</th>
                       <th scope="col">Runs</th>
-                      <th scope="col">Lowest</th>
-                      <th scope="col">Highest</th>
-                      <th scope="col">Most often</th>
+                      <th scope="col">Score (runs)</th>
                       <th scope="col">Same every run</th>
                       <th scope="col">Where it should land</th>
                     </tr>
@@ -247,12 +464,10 @@ export default function ScoringCheck() {
                       <tr key={item.id}>
                         <th scope="row">{item.label}</th>
                         <td>
-                          {sum ? sum.done : 0} of {runs}
+                          {sum ? sum.done : 0} of {ran.runs}
                           {failed > 0 && `, ${failed} failed`}
                         </td>
-                        <td>{sum ? tidy(sum.low) : ''}</td>
-                        <td>{sum ? tidy(sum.high) : ''}</td>
-                        <td>{sum ? `${tidy(sum.most)} (${Math.round(sum.share * 100)}%)` : ''}</td>
+                        <td>{sum ? (sum.steady ? tidy(sum.most) : sum.tally.map(([score, times]) => `${tidy(score)} (${times})`).join(', ')) : ''}</td>
                         <td className={sum ? (sum.steady ? 'yes' : 'no') : ''}>{sum ? (sum.steady ? 'Yes' : 'No') : ''}</td>
                         <td className={sum ? (sum.inBand ? 'yes' : 'no') : ''}>
                           {item.band[0] === item.band[1] ? item.band[0] : `${item.band[0]} to ${item.band[1]}`}
@@ -268,6 +483,30 @@ export default function ScoringCheck() {
                 store out, to show how far a fresh grading can move. If scores move more than you want, set GRADER_SAMPLES to 5
                 on the backend: each new answer is then rated five times.
               </p>
+            </section>
+          )}
+
+          {finished.length > 0 && (
+            <section className="section">
+              <div className="section-head">
+                <h2>Behind each score</h2>
+                <p>The scorecard each answer was given most often</p>
+              </div>
+              <ul className="check-behind">
+                {finished.map(({ item, sum, row }) => (
+                  <li key={item.id}>
+                    <details className="reveal">
+                      <summary>
+                        {item.label}: {tidy(sum.most)}
+                        {(!sum.steady || !sum.inBand) && (
+                          <span className="check-flag">{[!sum.steady && 'moved between runs', !sum.inBand && 'outside its range'].filter(Boolean).join(', ')}</span>
+                        )}
+                      </summary>
+                      <Behind item={item} row={row} most={sum.most} done={sum.done} />
+                    </details>
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
         </>

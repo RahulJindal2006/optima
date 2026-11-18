@@ -33,6 +33,9 @@ export const SOLID_AT = 75
 export const LEVELS = ['none', 'weak', 'partial', 'solid', 'strong']
 export const LEVEL_NAME = { none: 'None', weak: 'Weak', partial: 'Partial', solid: 'Solid', strong: 'Strong' }
 
+// The three marks one of a question's points can be given.
+export const MARK_NAME = { covered: 'Covered', partly: 'In part', missing: 'Missing' }
+
 // An application is created when a weekly interview scores this or more for a job.
 export const SEND_AT = 40
 
