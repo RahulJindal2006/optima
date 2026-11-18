@@ -5,99 +5,130 @@ import AppShell, { PageHead } from '../components/AppShell'
 import { Empty, Loading, Notice } from '../components/Bits'
 import DeliveryReport from '../components/DeliveryReport'
 import FairPlay from '../components/FairPlay'
-import Icon from '../components/Icon'
 import ScoreLine from '../components/ScoreLine'
+import Scorecard from '../components/Scorecard'
 import { PracticeStart } from '../components/StartInterview'
 import { STATUS_FOR_CANDIDATE, countWords, formatDate, plural } from '../lib/format'
-import { SEND_AT, whole } from '../lib/score'
+import { SEND_AT, SOLID_AT, whole } from '../lib/score'
 import '../styles/pages.css'
 
-// The grader is told that a solid answer lands between 82 and 90 (backend/claude_client.py).
-const SOLID = 82
-
-const same = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase()
+const KIND = { general: 'General', role: 'About the role', long: 'Long', code: 'Code' }
 
 // "1 min 40 s" for the time spent on a question.
 const spent = (seconds) => (seconds >= 60 ? `${Math.floor(seconds / 60)} min ${seconds % 60} s` : `${seconds} s`)
 
-function Answer({ text }) {
-  if (!text || !text.trim()) return <p className="muted">No answer was given.</p>
-  return <p className="prose answer">{text}</p>
+// 7.5 stays 7.5, 6.0 becomes 6.
+const tidy = (n) => (Number(n) % 1 ? Number(n).toFixed(1) : String(Number(n)))
+
+// Why a question has no scorecard to show, if it has none.
+function without(q) {
+  if (q.late) return ['clock', 'This answer reached the server after its time was up, so it was not counted.']
+  if (q.ungraded) return ['info', 'This answer could not be graded, so it is left out of the score.']
+  if (q.flagged === 'manipulation') return ['alert', 'This answer contained instructions aimed at the grader, so it scored 0.']
+  if (q.rubric?.blank || !q.rubric) return [null, 'No answer was given. A skipped question scores 0.']
+  return null
 }
 
+// One question: its score, the scorecard behind it, and the answer that was given, folded away.
 function QuestionResult({ q, number }) {
-  const hit = Array.isArray(q.key_points_hit) ? q.key_points_hit : []
-  const missed = (Array.isArray(q.key_points) ? q.key_points : []).filter((point) => !hit.some((h) => same(h, point)))
   const score = whole(q.score)
+  const none = without(q)
+  const kind = KIND[q.category] || (q.question_type === 'code' ? 'Code' : null)
 
   return (
     <li className="result">
       <div className="result-head">
         <span className="result-n">
           Question {number}
-          {q.question_type === 'code' && <span className="tag line">Code</span>}
-          {q.seconds >= 3 && !q.late && q.user_answer?.trim() && <span>{spent(q.seconds)}</span>}
+          {kind && <span className="tag line">{kind}</span>}
+          {q.seconds >= 3 && !q.late && !q.rubric?.blank && <span>{spent(q.seconds)}</span>}
         </span>
         {score != null && (
           <span className="result-score">
-            <ScoreLine value={score} at={SOLID} label={`${score} out of 100`} />
+            <ScoreLine value={score} at={SOLID_AT} label={`${score} out of 100`} />
             <b>{score}</b>
           </span>
         )}
       </div>
       <h3>{q.question_text}</h3>
 
-      {q.late ? (
-        <Notice icon="clock">This answer reached the server after its time was up, so it was not counted.</Notice>
+      {none ? (
+        none[0] ? (
+          <Notice icon={none[0]}>{none[1]}</Notice>
+        ) : (
+          <p className="muted">{none[1]}</p>
+        )
       ) : (
-        q.feedback && <p className="result-feedback">{q.feedback}</p>
+        <Scorecard rubric={q.rubric} />
       )}
+      {q.flagged === 'unexplained' && <Notice icon="alert">Most of this answer appeared in the page without being typed or dictated there.</Notice>}
+      {q.flagged === 'voice' && <Notice icon="alert">This answer came through dictation with almost no voice heard by the microphone.</Notice>}
 
-      {(hit.length > 0 || missed.length > 0) && (
-        <div className="feedback-cols">
-          {hit.length > 0 && (
-            <div>
-              <span className="label">Covered</span>
-              <ul className="points">
-                {hit.map((point, i) => (
-                  <li className="hit" key={`${point}-${i}`}>
-                    <Icon name="check" size={18} />
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {missed.length > 0 && (
-            <div>
-              <span className="label">Missed</span>
-              <ul className="points">
-                {missed.map((point, i) => (
-                  <li className="missed" key={`${point}-${i}`}>
-                    <Icon name="minus" size={18} />
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+      {q.user_answer?.trim() && (
+        <details className="reveal">
+          <summary>Your answer ({plural(countWords(q.user_answer), 'word')})</summary>
+          <p className="prose answer">{q.user_answer}</p>
+        </details>
       )}
-
-      <details className="reveal">
-        <summary>
-          Your answer{q.user_answer?.trim() ? ` (${plural(countWords(q.user_answer), 'word')})` : ''}
-        </summary>
-        <Answer text={q.user_answer} />
-      </details>
     </li>
   )
 }
 
-// A weekly interview: no answers to read back, only what it sent.
+// How the interview's score was reached: the number, how many questions were answered, what the camera cost.
+function ScoreSummary({ data, weekly }) {
+  const overall = whole(data.overall_score) ?? 0
+  const card = data.scorecard || {}
+  const done = card.completion || { answered: data.questions.filter((q) => q.user_answer?.trim()).length, total: data.questions.length, complete: true }
+  const cost = card.presence?.deduction || 0
+  const line =
+    overall >= 85
+      ? 'Strong answers across the interview.'
+      : overall >= SOLID_AT
+        ? 'Solid answers across the interview.'
+        : `${SOLID_AT - overall} below the mark for solid answers.`
+
+  return (
+    <>
+      <div className="stage overall">
+        <p className="overall-score">
+          <span className="sr-only">Interview score </span>
+          {overall}
+        </p>
+        <div className="overall-side">
+          <p className="overall-line">{line}</p>
+          <ScoreLine value={overall} at={SOLID_AT} label={`${overall} out of 100. Solid answers start at ${SOLID_AT}.`} />
+          <div className="lab-scale" aria-hidden="true">
+            <i>0</i>
+            <i className="at" style={{ left: `${SOLID_AT}%` }}>
+              {SOLID_AT}
+            </i>
+            <i style={{ left: '100%' }}>100</i>
+          </div>
+          <p className="hint">
+            {done.answered} of {plural(done.total, 'question')} answered. Each question counts by the time it was given, and
+            a skipped one counts as 0.
+            {cost > 0 && ` The answers came to ${tidy(card.raw)}. The camera took ${tidy(cost)} off.`}
+          </p>
+        </div>
+      </div>
+
+      {!done.complete && (
+        <Notice tone={weekly ? 'stop' : undefined} icon={weekly ? undefined : 'info'} title={`${done.answered} of ${done.total} questions answered.`}>
+          {weekly
+            ? `At least ${done.needed} are needed for an interview to be sent, so nothing was sent to any company.`
+            : `In a weekly interview at least ${done.needed} are needed, or nothing is sent to any company.`}
+        </Notice>
+      )}
+    </>
+  )
+}
+
+// A weekly interview: its score, what it sent, how it was taken, and the scorecard for every question.
 function WeeklyOutcome({ sessionId, session }) {
   const [sent, setSent] = useState(null)
   const [problem, setProblem] = useState('')
+  const complete = session.scorecard?.completion?.complete !== false
+  const unscored = session.scorecard?.unscored_roles || 0
 
   useEffect(() => {
     let live = true
@@ -112,13 +143,15 @@ function WeeklyOutcome({ sessionId, session }) {
   return (
     <>
       <PageHead title="Interview submitted" back={{ to: '/interview-hub', label: 'Interviews' }}>
-        {formatDate(session.completed_at || session.created_at)}. Answers from a weekly interview are not shown again.
+        {formatDate(session.completed_at || session.created_at)}. The scorecard for each answer is below.
       </PageHead>
+
+      <ScoreSummary data={session} weekly />
 
       {problem && <Notice tone="stop">{problem}</Notice>}
       {!problem && sent === null && <Loading>Loading what was sent</Loading>}
 
-      {sent && sent.length === 0 && (
+      {sent && sent.length === 0 && complete && (
         <Empty
           title={`No role scored ${SEND_AT} or more`}
           action={
@@ -132,7 +165,7 @@ function WeeklyOutcome({ sessionId, session }) {
       )}
 
       {sent && sent.length > 0 && (
-        <section>
+        <section className="section">
           <div className="section-head">
             <h2>Sent to {plural(sent.length, 'role')}</h2>
             <p>A score of {SEND_AT} or more sends the application</p>
@@ -166,6 +199,11 @@ function WeeklyOutcome({ sessionId, session }) {
           </div>
         </section>
       )}
+      {unscored > 0 && (
+        <Notice icon="info">
+          {plural(unscored, 'role')} could not be scored this time, so nothing was sent for {unscored === 1 ? 'it' : 'them'}.
+        </Notice>
+      )}
 
       {session.fair_play && (
         <section className="section fairplay-section">
@@ -176,6 +214,20 @@ function WeeklyOutcome({ sessionId, session }) {
           <FairPlay record={session.fair_play} />
         </section>
       )}
+
+      <section className="section">
+        <div className="section-head">
+          <h2>Question by question</h2>
+          <p>Each line of the scorecard, the level it reached, and what it added</p>
+        </div>
+        <ol className="results">
+          {session.questions.map((q, i) => (
+            <QuestionResult q={q} number={i + 1} key={q.id} />
+          ))}
+        </ol>
+      </section>
+
+      <DeliveryReport delivery={session.delivery} previous={null} />
     </>
   )
 }
@@ -331,9 +383,6 @@ export default function ResultsPage() {
     )
   }
 
-  const overall = whole(data.overall_score) ?? 0
-  const answered = data.questions.filter((q) => q.user_answer?.trim()).length
-
   return (
     <AppShell narrow>
       <PageHead title="Practice results" back={{ to: '/interview-hub?tab=practice', label: 'Interviews' }}>
@@ -348,29 +397,7 @@ export default function ResultsPage() {
         </p>
       ) : (
         <>
-          <div className="stage overall">
-            <p className="overall-score">
-              <span className="sr-only">Overall score </span>
-              {overall}
-            </p>
-            <div className="overall-side">
-              <p className="overall-line">
-                {overall >= SOLID ? 'In the range for solid answers.' : `${SOLID - overall} below the range for solid answers.`}
-              </p>
-              <ScoreLine value={overall} at={SOLID} label={`${overall} out of 100. Solid answers start at ${SOLID}.`} />
-              <div className="lab-scale" aria-hidden="true">
-                <i>0</i>
-                <i className="at" style={{ left: `${SOLID}%` }}>
-                  {SOLID}
-                </i>
-                <i style={{ left: '100%' }}>100</i>
-              </div>
-              <p className="hint">
-                The average of {plural(data.questions.length, 'question')}, {answered} answered. The grader is told that
-                a solid answer lands between {SOLID} and 90.
-              </p>
-            </div>
-          </div>
+          <ScoreSummary data={data} />
 
           <DeliveryReport delivery={data.delivery} previous={previous} />
 

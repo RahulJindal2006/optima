@@ -34,7 +34,7 @@ export default function Landing() {
               Every role that fits.
             </h1>
             <p className="lead">
-              Answer eight questions once a week. Optima scores your answers against every open role in your field and
+              Answer sixteen questions once a week. Optima scores your answers against every open role in your field and
               applies for you wherever you score 40 or more.
             </p>
             <div className="hero-actions">
@@ -62,9 +62,9 @@ export default function Landing() {
             <div className="split-copy">
               <h2>One window. One try.</h2>
               <p className="lead">
-                The weekly interview runs in full screen, one question at a time, on a clock the server keeps. Leaving
-                the window is recorded, and the third time ends it. Pasting is off. Companies see the record with
-                every application.
+                The weekly interview runs in full screen with your camera on, one question at a time, on a clock the
+                server keeps. Leaving the window is recorded, and the third time ends it. Time off camera or turned
+                away from the screen costs points. Pasting is off. Companies see the record with every application.
               </p>
             </div>
             <figure className="stage">
@@ -85,7 +85,7 @@ export default function Landing() {
               <h2>Practise first.</h2>
               <p className="lead">
                 Run a mock interview for any role: six questions, plus two coding questions for technical roles. Each
-                answer comes back with a score, what you covered and what you missed. Up to three a day.
+                answer comes back scored line by line, with what you covered and what you missed. Up to three a day.
               </p>
               <Link to="/register?role=candidate" className="btn primary lg">
                 Create a candidate account
@@ -102,9 +102,9 @@ export default function Landing() {
             <div className="split-copy">
               <h2 id="coach-title">A coach in your camera.</h2>
               <p className="lead">
-                Turn it on in a practice interview. It watches your eye contact and posture, listens to your pace and
-                your filler words, and says what to fix while you answer. It runs on your device: no video or sound is
-                saved or sent.
+                On in every weekly interview, optional in practice. It watches your eye contact and posture, listens
+                to your pace and your filler words, and says what to fix while you answer. It runs on your device: no
+                video or sound is saved or sent.
               </p>
             </div>
             <figure className="stage">

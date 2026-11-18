@@ -189,7 +189,8 @@ export default function InterviewHub() {
 
   const { applications, sessions, availability, saved } = data
   const active = applications.filter((a) => a.status !== 'withdrawn').sort((a, b) => b.match_score - a.match_score)
-  const weekly = sessions.filter((s) => s.session_type === 'connecting')
+  // questions that were written and never begun are not interviews: no question was shown and the week was not used
+  const weekly = sessions.filter((s) => s.session_type === 'connecting' && sessionState(s) !== 'unbegun')
   const practice = sessions.filter((s) => s.session_type === 'mock').slice(0, 10)
   const usedToday = practiceUsedToday(sessions)
 
@@ -384,7 +385,7 @@ export default function InterviewHub() {
                             <Icon name="chevron-right" size={18} />
                           </>
                         ) : (
-                          <span className="tag line">{state === 'open' ? 'Open in another window' : 'Left before the end'}</span>
+                          <span className="tag line">{state === 'open' ? 'Open in another window' : state === 'unbegun' ? 'Not begun' : 'Left before the end'}</span>
                         )}
                       </span>
                     </>

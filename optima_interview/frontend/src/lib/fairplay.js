@@ -30,5 +30,24 @@ export function fairPlayLines(record) {
   if (record.unexplained_answers > 0) {
     lines.push(`${plural(record.unexplained_answers, 'answer')} appeared in the page without being typed or dictated there.`)
   }
+  if (record.voice_mismatch_answers > 0) {
+    lines.push(`${plural(record.voice_mismatch_answers, 'answer')} came through dictation with almost no voice heard by the microphone.`)
+  }
+  for (const line of record.camera?.lines || []) {
+    const cost = `${pointsOff(line.points)} off the interview score`
+    if (line.key === 'off_camera') lines.push(`Off camera for ${share(line.share)} of the interview: ${cost}.`)
+    if (line.key === 'looking_away') lines.push(`Turned away from the screen for ${share(line.share)} of the time on camera: ${cost}.`)
+    if (line.key === 'second_person') lines.push(`A second person was in the picture for ${plural(line.seconds, 'second')}: ${cost}.`)
+  }
   return lines
+}
+
+const share = (value) => `${Math.round((value || 0) * 100)}%`
+const pointsOff = (value) => `${Number(value) % 1 ? Number(value).toFixed(1) : Number(value)} ${Number(value) === 1 ? 'point' : 'points'}`
+
+// The camera's side of a clean record, as one sentence. Null on interviews from before the camera was required.
+export function cameraLine(record) {
+  const camera = record?.camera
+  if (!camera || camera.off_camera == null) return null
+  return `On camera for ${share(1 - camera.off_camera)} of the interview, facing the screen for ${share(1 - (camera.looking_away || 0))} of that.`
 }

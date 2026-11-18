@@ -90,6 +90,9 @@ class InterviewQuestion(Base):
     feedback = Column(Text, nullable=True)
     key_points_hit = Column(JSON, nullable=True)    # list of points the user covered
     question_order = Column(Integer, nullable=False, default=0)
+    category = Column(String, nullable=True)        # "general" | "role" | "long" | "code"; None on older interviews
+    seconds = Column(Integer, nullable=True)        # the time this question is given; None on older interviews
+    rubric = Column(JSON, nullable=True)            # the scorecard behind the score: each line, its level, what it earned
 
     session = relationship("InterviewSession", back_populates="questions")
 
@@ -113,9 +116,27 @@ class InterviewRun(Base):
     strikes = Column(Integer, default=0)              # times the candidate left the interview window
     events = Column(JSON, nullable=True)              # [{type, at, how, ms, q}]
     answers_meta = Column(JSON, nullable=True)        # {question_id: {seconds, late, typed, dictated, ...}}
-    delivery = Column(JSON, nullable=True)            # camera coach numbers, practice only; never pictures
+    delivery = Column(JSON, nullable=True)            # what the camera coach measured, as numbers; never pictures
+    scorecard = Column(JSON, nullable=True)           # how the interview's score was reached: questions answered, what the camera cost
 
     session = relationship("InterviewSession", back_populates="run")
+
+
+class GradeRecord(Base):
+    """One grade, kept under a fingerprint of exactly what was graded (rubric.py makes the fingerprint).
+
+    The same answer to the same question has the same fingerprint, so it is looked up here and
+    never graded twice: two people who give the same answer get the same grade, today or next year.
+    Nothing in a row says whose answer it was.
+    """
+    __tablename__ = "grade_records"
+
+    key = Column(String(64), primary_key=True)
+    kind = Column(String, nullable=False)             # "answer" | "fit-answers" | "fit-profile"
+    rubric_version = Column(String, nullable=False)
+    model = Column(String, nullable=True)             # the model that did the rating
+    result = Column(JSON, nullable=False)             # the levels and marks that were picked, and the words that go with them
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class JobPosting(Base):

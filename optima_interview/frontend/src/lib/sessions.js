@@ -19,7 +19,9 @@ export function practiceResetsAt() {
 //   scored   finished and scored            ended    a weekly interview that was closed or left: it scored 0
 //   scoring  every answer is in             open     being taken in another window right now
 //   left     a practice interview left part-way: no score
+//   unbegun  the questions were written and Begin was never pressed: nothing was shown and nothing was used
 export function sessionState(session) {
+  if (session.ended_reason === 'not_begun') return 'unbegun'
   if (session.status === 'completed') return session.ended_reason ? 'ended' : 'scored'
   if (session.status === 'in_progress') return session.awaiting_scoring ? 'scoring' : 'open'
   return 'left'

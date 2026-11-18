@@ -6,13 +6,13 @@ import { PanelInterview, PanelScore, PanelSent, PanelShortlist } from './Panels'
 const STEPS = [
   {
     title: 'Answer once',
-    body: 'Save the roles you want. Once a week you get eight questions built from them, five minutes each. Type your answers or speak them.',
+    body: 'Save the roles you want. Once a week you get sixteen questions, most of them two to three minutes: six that everyone is asked, ten built from your roles. Type your answers or speak them.',
     Panel: PanelInterview,
-    alt: 'The interview screen: question 3 of 8, a timer, and a typed answer.',
+    alt: 'The interview screen: question 9 of 16, a timer, and a typed answer.',
   },
   {
     title: 'Scored on four things',
-    body: 'Claude reads your answers against every open role in your field: how well you answered, how relevant it was, your skills and your resume.',
+    body: 'Each answer is graded line by line on a fixed scorecard, so the same answer to the same question always gets the same grade. Then every open role in your field gets a match score from four parts.',
     Panel: PanelScore,
     alt: 'A match score of 87 for one role, broken into its four weighted parts.',
   },

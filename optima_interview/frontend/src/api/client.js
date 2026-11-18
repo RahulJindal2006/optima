@@ -170,6 +170,17 @@ export async function scoreInterview(sessionId, body = {}, alive = () => true) {
 
 export const getMySessions = () => request('/interviews/')
 
+// ── Scoring ───────────────────────────────────────────────────────────────────
+/** The scorecard, weights and rules, exactly as the server applies them. */
+export const getRubric = () => request('/scoring/rubric')
+
+/** The owner's check of the grader. `key` is the ADMIN_KEY set on the server; it is sent with each request and kept nowhere. */
+export const getScoringCheck = (key) => request('/scoring/check', { headers: { 'X-Admin-Key': key } })
+
+/** Grade one reference answer afresh, `runs` times. Each run makes real calls to Claude. */
+export const runScoringCheck = (key, body) =>
+  request('/scoring/check/run', { method: 'POST', headers: { 'X-Admin-Key': key }, body: JSON.stringify(body) })
+
 // ── Jobs ──────────────────────────────────────────────────────────────────────
 export const listJobs = (filters = {}) => {
   const params = new URLSearchParams()

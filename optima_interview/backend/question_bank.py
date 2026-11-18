@@ -230,3 +230,152 @@ def get_industry_context(industry: str) -> dict:
         "code_topics": [],
         "has_technical": False,
     })
+
+
+# ── The general questions ─────────────────────────────────────────────────────
+# Asked of every candidate, whatever the role, so that everyone is measured on the same ground.
+# They are written here rather than by the model: the same words and the same points to look
+# for, for everyone. Only the name of the role is filled in.
+#
+# {roles} becomes "Software Engineer roles" or "Software Engineer and Data Analyst roles".
+GENERAL_QUESTIONS = [
+    {
+        "id": "about",
+        "text": "Tell me about yourself, and what draws you to {roles}.",
+        "points": [
+            "Background in brief: the studies, work or projects that matter here",
+            "One or two skills or results that bear on this kind of role",
+            "A clear reason for wanting this kind of role",
+            "What comes next: what to do or learn",
+        ],
+    },
+    {
+        "id": "organisation",
+        "text": "What do you look for in an organisation, and what makes one stand out to you?",
+        "points": [
+            "Specific things looked for, such as the work, the team or how people grow",
+            "Why those things matter, drawn from experience",
+            "Signs of looking into an employer before applying",
+            "A link between what is wanted and what would be contributed",
+        ],
+    },
+    {
+        "id": "team",
+        "text": "Tell me about a time you worked with other people to get something difficult done. What was your part?",
+        "points": [
+            "The situation, and what the group was trying to do",
+            "A personal part in it, distinct from the group's",
+            "How a difficulty or a disagreement in the group was handled",
+            "What came of it, and what was learned",
+        ],
+    },
+    {
+        "id": "setback",
+        "text": "Describe a time you were given critical feedback, or something you did went wrong. What did you do next?",
+        "points": [
+            "A real, specific setback or piece of criticism",
+            "Taking responsibility without blaming others",
+            "What changed afterwards",
+            "A sign that the change worked, or what was learned",
+        ],
+    },
+    {
+        "id": "learning",
+        "text": "Tell me about a time you had to learn something new quickly to get a piece of work done.",
+        "points": [
+            "What had to be learned, and why there was little time",
+            "How it was learned",
+            "How it was put to use in the work",
+            "How the work turned out",
+        ],
+    },
+    {
+        "id": "priorities",
+        "text": "How do you decide what to do first when several things are due at once? Give an example.",
+        "points": [
+            "A way of ranking the work, such as by deadline, by effect or by who is waiting",
+            "A specific time it was used",
+            "Telling the people affected, or asking for help",
+            "What happened in the end",
+        ],
+    },
+    {
+        "id": "proud",
+        "text": "Tell me about something you built, wrote or organised that you are proud of. Why that one?",
+        "points": [
+            "What it was, and why it mattered",
+            "A personal contribution",
+            "An obstacle, and the way past it",
+            "A result that can be pointed to",
+        ],
+    },
+    {
+        "id": "explain",
+        "text": "Describe a time you had to explain something complicated to someone who was not an expert in it.",
+        "points": [
+            "Who it was explained to, and what that person needed",
+            "How it was made simpler, such as with an example or a comparison",
+            "How understanding was checked",
+            "What came of it",
+        ],
+    },
+    {
+        "id": "disagreement",
+        "text": "Tell me about a time you disagreed with a teammate, a manager or a client. How did it end?",
+        "points": [
+            "The disagreement, told fairly to both sides",
+            "How the case was made, and how the other side was heard",
+            "How it was settled",
+            "What would be done the same way again, or differently",
+        ],
+    },
+    {
+        "id": "direction",
+        "text": "Where do you want to be in two or three years, and how do {roles} get you there?",
+        "points": [
+            "A direction that is specific, not only a job title",
+            "Why this kind of role is a step towards it",
+            "What is being done now to get there",
+            "An honest view of what is still to be learned",
+        ],
+    },
+]
+
+WEEKLY_GENERAL = 6
+PRACTICE_GENERAL = 2
+
+
+def roles_phrase(titles: List[str]) -> str:
+    """"Software Engineer roles", "Software Engineer and Data Analyst roles", or the first two "and similar roles"."""
+    names = [t.strip() for t in dict.fromkeys(titles) if t and t.strip()]
+    if not names:
+        return "roles like this one"
+    if len(names) == 1:
+        return f"{names[0]} roles"
+    if len(names) == 2:
+        return f"{names[0]} and {names[1]} roles"
+    return f"{names[0]}, {names[1]} and similar roles"
+
+
+def _shuffled(items: list, seed: str) -> list:
+    """The same order for the same seed, on every machine (Python's own hash changes between runs)."""
+    import hashlib
+
+    return sorted(items, key=lambda item: hashlib.sha256(f"{seed}:{item['id']}".encode("utf-8")).hexdigest())
+
+
+def general_questions(titles: List[str], count: int, seed: str) -> List[dict]:
+    """`count` general questions, the opener first. Which of the others are asked follows `seed`:
+    the weekly interview passes the week, so everyone who interviews in the same week is asked the same ones."""
+    opener, rest = GENERAL_QUESTIONS[0], GENERAL_QUESTIONS[1:]
+    chosen = [opener] + _shuffled(rest, seed)[: max(0, count - 1)]
+    roles = roles_phrase(titles)
+    return [
+        {
+            "question_text": q["text"].format(roles=roles),
+            "question_type": "verbal",
+            "key_points": list(q["points"]),
+            "category": "general",
+        }
+        for q in chosen[:count]
+    ]

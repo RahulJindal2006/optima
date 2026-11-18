@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -14,17 +13,23 @@ import schemas
 import auth as auth_utils
 import claude_client
 import interview_rules as rules
-from question_bank import SUPPORTED_INDUSTRIES, get_roles_for_industry
+import rubric
+import scoring
+from question_bank import PRACTICE_GENERAL, SUPPORTED_INDUSTRIES, WEEKLY_GENERAL, general_questions, get_roles_for_industry
 
 router = APIRouter(prefix="/interviews", tags=["interviews"])
 log = logging.getLogger("optima")
 
-# How many answers (or jobs) are sent to Claude at the same time when an interview is scored.
+# How many answers are worked on in one step when an interview is scored. A new answer is rated
+# several times over (scoring.SAMPLES), so one step is a few times this many calls.
 SCORERS = 4
+# A role takes two ratings (the answers against it, the profile against it), each made several
+# times over, so fewer roles make a step of the same size.
+ROLES_AT_ONCE = 2
 
 # Scoring is done in steps that are each saved, so it can stop and carry on:
 # one request starts new steps for this long, then reports back, and the page asks again.
-# A step under way is finished first (four answers, or four roles), so a request can outlast
+# A step under way is finished first (four answers, or two roles), so a request can outlast
 # this by one step. On a host that stops requests early, set it to 1: one step a request.
 SCORING_BUDGET_SECONDS = float(os.getenv("SCORING_BUDGET_SECONDS", "50"))
 # A request that was scoring and has saved nothing for this long is taken to have died.
@@ -38,6 +43,7 @@ MATCH_PRACTICE = os.getenv("MATCH_PRACTICE_INTERVIEWS", "1").strip().lower() not
 MAX_WEEKLY_ROLES = 10
 
 QUESTIONS_FAILED = "The questions could not be written. Nothing was used up: try again in a moment."
+NOT_BEGUN_TOO_OFTEN = "The weekly interview was set up three times today without being begun. Your week has not been used: try again tomorrow."
 SCORING_FAILED = "Scoring could not finish just now. Your answers are saved: try again in a moment."
 COULD_NOT_GRADE = "This answer could not be graded, so it is left out of your score."
 
@@ -69,8 +75,8 @@ def _served(question: models.InterviewQuestion, run: models.InterviewRun, now: d
         question_text=question.question_text,
         question_type=question.question_type,
         question_order=question.question_order,
-        seconds=rules.seconds_for(question.question_type),
-        seconds_left=rules.seconds_left(run.served_at, question.question_type, now),
+        seconds=rules.seconds_for(question),
+        seconds_left=rules.seconds_left(run.served_at, question, now),
     )
 
 
@@ -78,11 +84,12 @@ def _end_early(db: Session, session: models.InterviewSession, run: Optional[mode
     """Close an interview that was not finished.
 
     A weekly interview that ends early scores 0 and sends nothing; the week stays used.
-    A practice interview is simply marked as left: it has no score.
+    A practice interview is simply marked as left: it has no score. So is a weekly interview that
+    was never begun: no question was shown, so there is nothing to score and the week is not used.
     """
     if run is not None:
         run.ended_reason = reason
-    if run is not None and rules.is_locked(session.session_type):
+    if run is not None and rules.is_locked(session.session_type) and reason != "not_begun":
         session.status = "completed"
         session.overall_score = 0.0
         session.completed_at = datetime.utcnow()
@@ -110,9 +117,7 @@ def _settle(db: Session, session: models.InterviewSession) -> None:
     if run.current_order >= len(questions):
         return  # every answer is in; it only needs scoring
     current = questions[run.current_order]
-    out_of_time = now > run.served_at + timedelta(
-        seconds=rules.seconds_for(current.question_type) + rules.GRACE_SECONDS + 60
-    )
+    out_of_time = now > run.served_at + timedelta(seconds=rules.seconds_for(current) + rules.GRACE_SECONDS + 60)
     silent = now > (run.last_seen_at or run.begun_at) + timedelta(seconds=rules.SILENT_AFTER_SECONDS)
     if out_of_time or silent:
         _end_early(db, session, run, "left")
@@ -146,6 +151,38 @@ def _live_run(session: models.InterviewSession, attempt: Optional[str]) -> model
     return run
 
 
+# Questions are written before the camera and microphone check, and the check can fail. Writing them
+# costs a call to Claude each time, so there is a limit on how often it can be done for nothing.
+UNBEGUN_WEEKLY_PER_DAY = 3
+
+
+def _weekly(db: Session, user: models.User, since: datetime) -> List[models.InterviewSession]:
+    return (
+        db.query(models.InterviewSession)
+        .filter(
+            models.InterviewSession.user_id == user.id,
+            models.InterviewSession.session_type == "connecting",
+            models.InterviewSession.created_at >= since,
+        )
+        .order_by(models.InterviewSession.created_at.desc())
+        .all()
+    )
+
+
+def _week_used_by(db: Session, user: models.User) -> Optional[models.InterviewSession]:
+    """The weekly interview that uses up this week, if there is one.
+
+    The week is used when the candidate presses Begin and the first question is shown. Questions
+    that were written and never begun (the camera check did not pass, say) do not use it: nothing
+    was shown, so nothing is gained by starting again.
+    """
+    for session in _weekly(db, user, datetime.utcnow() - timedelta(days=7)):
+        run = session.run
+        if run is None or run.begun_at is not None:   # an interview from before runs were kept counts as taken
+            return session
+    return None
+
+
 def _waiting_to_begin(db: Session, user: models.User, session_type: str, payload) -> Optional[models.InterviewSession]:
     """An interview of this kind whose questions are written but which has not begun, if there is one."""
     cutoff = datetime.utcnow() - timedelta(seconds=rules.BEGIN_WITHIN_SECONDS)
@@ -175,7 +212,7 @@ def _start_response(session: models.InterviewSession, questions: List[models.Int
         session_type=session.session_type,
         question_count=len(questions),
         outline=[
-            schemas.OutlineItem(question_order=i, question_type=q.question_type, seconds=rules.seconds_for(q.question_type))
+            schemas.OutlineItem(question_order=i, question_type=q.question_type, seconds=rules.seconds_for(q), category=q.category)
             for i, q in enumerate(questions)
         ],
         rules=schemas.InterviewRules(
@@ -188,7 +225,8 @@ def _start_response(session: models.InterviewSession, questions: List[models.Int
     )
 
 
-def _results(session: models.InterviewSession, questions: List[models.InterviewQuestion]) -> schemas.InterviewResultResponse:
+def _results(session: models.InterviewSession, questions: List[models.InterviewQuestion],
+             for_company: bool = False) -> schemas.InterviewResultResponse:
     run = session.run
     meta = (run.answers_meta or {}) if run else {}
     awaiting = bool(
@@ -200,8 +238,15 @@ def _results(session: models.InterviewSession, questions: List[models.InterviewQ
         result = schemas.QuestionResult.model_validate(question)
         about = meta.get(str(question.id)) or {}
         result.seconds = about.get("seconds")
+        result.seconds_allowed = rules.seconds_for(question)
         result.late = bool(about.get("late"))
-        result.flagged = "manipulation" if about.get("manipulation") else "unexplained" if about.get("unexplained") else None
+        result.ungraded = bool(about.get("ungraded"))
+        result.flagged = (
+            "manipulation" if about.get("manipulation")
+            else "unexplained" if about.get("unexplained")
+            else "voice" if about.get("voice_mismatch")
+            else None
+        )
         shown.append(result)
     return schemas.InterviewResultResponse(
         session_id=session.id,
@@ -216,7 +261,9 @@ def _results(session: models.InterviewSession, questions: List[models.InterviewQ
         ended_reason=run.ended_reason if run else None,
         awaiting_scoring=awaiting,
         fair_play=rules.fair_play_summary(run, session.session_type),
-        delivery=run.delivery if run and session.session_type == "mock" else None,
+        # what the coach measured is for the candidate: a company sees the fair-play record, not this
+        delivery=run.delivery if run and not for_company else None,
+        scorecard=run.scorecard if run and session.status != "in_progress" else None,
     )
 
 
@@ -227,17 +274,7 @@ def can_connect(
 ):
     """Check if the candidate can start a new connecting interview (1 per 7 days)."""
     settle_stale(db, current_user)
-    cutoff = datetime.utcnow() - timedelta(days=7)
-    recent = (
-        db.query(models.InterviewSession)
-        .filter(
-            models.InterviewSession.user_id == current_user.id,
-            models.InterviewSession.session_type == "connecting",
-            models.InterviewSession.created_at >= cutoff,
-        )
-        .order_by(models.InterviewSession.created_at.desc())
-        .first()
-    )
+    recent = _week_used_by(db, current_user)
     if recent:
         next_available = (recent.created_at + timedelta(days=7)).isoformat()
         return schemas.ConnectAvailability(can_connect=False, next_available=next_available)
@@ -290,23 +327,18 @@ def start_interview(
             )
 
     if session_type == "connecting":
-        # Enforce 1-per-7-days limit
-        cutoff = datetime.utcnow() - timedelta(days=7)
-        recent = (
-            db.query(models.InterviewSession)
-            .filter(
-                models.InterviewSession.user_id == current_user.id,
-                models.InterviewSession.session_type == "connecting",
-                models.InterviewSession.created_at >= cutoff,
-            )
-            .first()
-        )
+        # Enforce 1-per-7-days limit: one interview begun, not one set of questions written
+        recent = _week_used_by(db, current_user)
         if recent:
             next_available = (recent.created_at + timedelta(days=7)).isoformat()
             raise HTTPException(
                 status_code=429,
                 detail=f"Connecting interview limit reached. Next available: {next_available}",
             )
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        unbegun = [s for s in _weekly(db, current_user, today_start) if s.run is not None and s.run.begun_at is None]
+        if len(unbegun) >= UNBEGUN_WEEKLY_PER_DAY:
+            raise HTTPException(status_code=429, detail=NOT_BEGUN_TOO_OFTEN)
 
         # Fetch favourited jobs: each id once, and only roles this candidate has saved
         wanted = list(dict.fromkeys(payload.favourite_job_ids or []))[:MAX_WEEKLY_ROLES]
@@ -357,7 +389,9 @@ def start_interview(
         # For connecting sessions, store a representative job title and industry
         job_title = ", ".join(dict.fromkeys(j.title for j in favourite_jobs[:3]))
         industry = favourite_jobs[0].industry
-        connecting_week = datetime.utcnow().strftime("%Y-W%V")
+        connecting_week = datetime.utcnow().strftime("%G-W%V")
+        # The general questions: the same for everyone who interviews this week.
+        opening = general_questions([j.title for j in favourite_jobs], WEEKLY_GENERAL, seed=connecting_week)
 
     else:  # mock
         try:
@@ -369,6 +403,8 @@ def start_interview(
         job_title = payload.job_title
         industry = payload.industry
         connecting_week = None
+        # Two of the general questions, a different pair each time a practice is started.
+        opening = general_questions([job_title], PRACTICE_GENERAL, seed=f"{current_user.id}:{datetime.utcnow().isoformat()}")
 
     # Create session
     session = models.InterviewSession(
@@ -382,15 +418,17 @@ def start_interview(
     db.add(session)
     db.flush()
 
-    # Persist questions
+    # Persist questions: the general ones first, then the ones written for the roles, the long ones last
     db_questions = []
-    for i, q in enumerate(questions_data):
+    for i, q in enumerate(opening + questions_data):
         question = models.InterviewQuestion(
             session_id=session.id,
             question_text=q["question_text"],
             question_type=q["question_type"],
             key_points=q["key_points"],
             question_order=i,
+            category=q.get("category"),
+            seconds=q.get("seconds") or rubric.seconds_for(q.get("category"), q["question_type"]),
         )
         db.add(question)
         db_questions.append(question)
@@ -469,12 +507,14 @@ def answer_question(
             return reply(late=bool((run.answers_meta or {}).get(str(previous.id), {}).get("late")))
         raise HTTPException(status_code=409, detail="That is not the question being asked.")
 
-    late = rules.clock_ran_out(run.served_at, current.question_type, now)
+    late = rules.clock_ran_out(run.served_at, current, now)
     answer = "" if late else (payload.answer or "")[: rules.MAX_ANSWER_CHARS]
     signals = rules.clean_signals(payload.signals)
     about = {"seconds": int((now - run.served_at).total_seconds()), "late": late, **signals}
     if rules.unexplained_text(answer, signals):
         about["unexplained"] = True
+    if rules.voice_mismatch(signals):
+        about["voice_mismatch"] = True
 
     current.user_answer = answer
     run.answers_meta = {**(run.answers_meta or {}), str(current.id): about}
@@ -543,7 +583,7 @@ def check_in(
     current = questions[run.current_order] if run.current_order < len(questions) else None
     return schemas.PingResponse(
         ended=False,
-        seconds_left=rules.seconds_left(run.served_at, current.question_type, now) if current else None,
+        seconds_left=rules.seconds_left(run.served_at, current, now) if current else None,
     )
 
 
@@ -583,21 +623,28 @@ async def page_closed(session_id: int, request: Request, db: Session = Depends(g
     return _abandon(db, session_id, user)
 
 
-def _safely(call, *args, **kwargs):
-    try:
-        return call(*args, **kwargs)
-    except Exception:
-        return None
-
-
 def _batches(items: list, size: int):
     for at in range(0, len(items), size):
         yield items[at:at + size]
 
 
+# The longest a scoring request sits still after Claude says to slow down, before it reports back.
+BUSY_PAUSE_SECONDS = 5.0
+
+
+def _held_up(results: list, deadline: float) -> bool:
+    """True when Claude said to slow down during this batch. Waits a moment first, so the page that
+    asks again straight away does not send the next batch into the same limit."""
+    pause = scoring.wait_for(results)
+    if not pause:
+        return False
+    time.sleep(max(0.0, min(pause, BUSY_PAUSE_SECONDS, deadline - time.monotonic())))
+    return True
+
+
 def _needs_grader(question: models.InterviewQuestion) -> bool:
     """False for an answer that is empty or a word or two: it scores 0 without being sent anywhere."""
-    return len((question.user_answer or "").strip()) >= 10
+    return not rubric.is_blank(question.user_answer, question.question_type)
 
 
 def _grade_answers(db: Session, session: models.InterviewSession, run: models.InterviewRun,
@@ -609,31 +656,30 @@ def _grade_answers(db: Session, session: models.InterviewSession, run: models.In
     """
     meta = dict(run.answers_meta or {})
     failed = 0
+    # on the last try a single rating of an answer is accepted, where normally two must agree to be combined
+    last_try = (run.scoring_tries or 0) >= MAX_SCORING_TRIES - 1
     for batch in _batches([q for q in questions if q.score is None], SCORERS):
         if time.monotonic() >= deadline:
             break
-        # only plain values cross into the worker threads
         work = [(q.question_text, q.question_type, list(q.key_points or []), q.user_answer or "") for q in batch]
-        with ThreadPoolExecutor(max_workers=SCORERS) as pool:
-            graded = list(pool.map(lambda args: _safely(claude_client.grade_answer, *args), work))
-        for question, result in zip(batch, graded):
+        results = scoring.grade_answers(db, work, lenient=last_try)
+        for question, result in zip(batch, results):
+            if scoring.is_busy(result):
+                continue  # Claude said to slow down: the answer is graded on the next request, and it is not a failure
             if result is None:
                 failed += 1
                 continue
-            if result.get("manipulation"):
-                # text written for the grader, not for the question: it earns nothing and goes on the record
-                result = {
-                    "score": 0.0,
-                    "feedback": "This answer contained instructions aimed at the grader, so it scored 0.",
-                    "key_points_hit": [],
-                }
+            if result["manipulation"]:
                 meta[str(question.id)] = {**(meta.get(str(question.id)) or {}), "manipulation": True}
             question.score = result["score"]
             question.feedback = result["feedback"]
             question.key_points_hit = result["key_points_hit"]
+            question.rubric = result["rubric"]
         run.answers_meta = meta
         run.finishing_at = datetime.utcnow()  # still at work
         db.commit()
+        if _held_up(results, deadline):
+            break
 
     ungraded = [q for q in questions if q.score is None]
     if ungraded and not failed:
@@ -651,13 +697,23 @@ def _grade_answers(db: Session, session: models.InterviewSession, run: models.In
             question.score = 0.0
             question.feedback = COULD_NOT_GRADE
             question.key_points_hit = []
+            # an answer was given: that it could not be graded is not held against the candidate
+            question.rubric = {"version": rubric.VERSION, "ungraded": True, "answered": True, "lines": [], "cap": None}
             meta[str(question.id)] = {**(meta.get(str(question.id)) or {}), "ungraded": True}
         run.answers_meta = meta
 
-    counted = [q.score for q in questions if not (meta.get(str(q.id)) or {}).get("ungraded")]
-    session.overall_score = round(sum(counted) / len(counted), 1) if counted else 0.0
+    # Every question counts, weighted by its time. A skipped one counts as 0.
+    card = scoring.interview_card(questions, meta, rules.is_locked(session.session_type))
+    run.scorecard = card
+    session.overall_score = card["overall"]
     db.commit()
     return True
+
+
+def _complete(run: models.InterviewRun) -> bool:
+    """False when too few questions were answered for the interview to be sent anywhere."""
+    done = ((run.scorecard or {}).get("completion") or {}) if isinstance(run.scorecard, dict) else {}
+    return bool(done.get("complete", True))
 
 
 @router.post("/{session_id}/finish", response_model=schemas.InterviewResultResponse)
@@ -713,7 +769,7 @@ def finish_interview(
 
     try:
         db.refresh(run)
-        if session.session_type == "mock" and payload.delivery is not None:
+        if payload.delivery is not None and run.delivery is None:
             run.delivery = rules.clean_delivery(payload.delivery)
             db.commit()
 
@@ -768,82 +824,44 @@ def _open_roles(db: Session, session: models.InterviewSession, done: set) -> Lis
     return [job for job in jobs if job.id not in done]
 
 
-def _score_roles(session: models.InterviewSession, candidate: models.User,
+def _score_roles(db: Session, session: models.InterviewSession, run: models.InterviewRun, candidate: models.User,
                  questions: List[models.InterviewQuestion], jobs: List[models.JobPosting]) -> list:
     """Score the interview against a few roles at the same time. None where scoring a role failed."""
-    qa_pairs = [{"question": q.question_text, "answer": q.user_answer or ""} for q in questions]
-    shared = dict(
-        candidate_job_title=session.job_title,
-        candidate_industry=session.industry,
-        qa_pairs=qa_pairs,
-        candidate_skills=list(candidate.skills or []),
-        candidate_resume=candidate.resume_text,
-        session_type=session.session_type,
-    )
-    work = [
-        dict(
-            job_title=job.title,
-            job_description=job.description,
-            required_skills=list(job.required_skills or []),
-            job_responsibilities=job.responsibilities,
-            **shared,
-        )
-        for job in jobs
-    ]
-    with ThreadPoolExecutor(max_workers=SCORERS) as pool:
-        return list(pool.map(lambda kwargs: _safely(claude_client.score_candidate_job_match, **kwargs), work))
+    return scoring.fit_roles(db, questions, run.answers_meta or {}, candidate, jobs, session.overall_score or 0.0)
 
 
-def _parts(session: models.InterviewSession, result):
-    """(match_score, reasoning, performance, relevance, skills, resume) with the fallback used when scoring failed."""
-    if result is None:
-        return session.overall_score or 0.0, "Match score based on overall interview performance.", None, None, None, None
-    return (
-        result["match_score"],
-        result["reasoning"],
-        result.get("interview_performance_score"),
-        result.get("answer_relevance_score"),
-        result.get("profile_skills_score"),
-        result.get("ats_score"),
-    )
-
-
-def _keep_match(db: Session, session: models.InterviewSession, candidate: models.User, job: models.JobPosting, result) -> None:
-    match_score, reasoning, ip_score, ar_score, ps_score, ats = _parts(session, result)
-
+def _keep_match(db: Session, session: models.InterviewSession, candidate: models.User, job: models.JobPosting, result: dict) -> None:
     existing = db.query(models.Match).filter(
         models.Match.job_id == job.id,
         models.Match.candidate_user_id == candidate.id,
     ).first()
 
     if existing:
-        if match_score > existing.match_score:
-            existing.match_score = match_score
-            existing.reasoning = reasoning
+        if result["match_score"] > existing.match_score:
+            existing.match_score = result["match_score"]
+            existing.reasoning = result["reasoning"]
             existing.session_id = session.id
-            existing.interview_performance_score = ip_score
-            existing.answer_relevance_score = ar_score
-            existing.profile_skills_score = ps_score
-            existing.ats_score = ats
+            existing.interview_performance_score = result["interview_performance_score"]
+            existing.answer_relevance_score = result["answer_relevance_score"]
+            existing.profile_skills_score = result["profile_skills_score"]
+            existing.ats_score = result["ats_score"]
     else:
         db.add(models.Match(
             job_id=job.id,
             candidate_user_id=candidate.id,
             session_id=session.id,
-            match_score=match_score,
-            reasoning=reasoning,
-            interview_performance_score=ip_score,
-            answer_relevance_score=ar_score,
-            profile_skills_score=ps_score,
-            ats_score=ats,
+            match_score=result["match_score"],
+            reasoning=result["reasoning"],
+            interview_performance_score=result["interview_performance_score"],
+            answer_relevance_score=result["answer_relevance_score"],
+            profile_skills_score=result["profile_skills_score"],
+            ats_score=result["ats_score"],
         ))
 
 
-def _keep_application(db: Session, session: models.InterviewSession, candidate: models.User, job: models.JobPosting, result) -> None:
-    match_score, reasoning, ip_score, ar_score, ps_score, ats = _parts(session, result)
-
-    # Only create application if score warrants it (>= 40%)
-    if match_score < 40:
+def _keep_application(db: Session, session: models.InterviewSession, candidate: models.User, job: models.JobPosting, result: dict) -> None:
+    # An application is only sent when the match score reaches the line (rubric.SEND_AT)
+    if result["match_score"] < rubric.SEND_AT:
         return
 
     existing = (
@@ -856,14 +874,14 @@ def _keep_application(db: Session, session: models.InterviewSession, candidate: 
     )
 
     if existing:
-        if match_score > existing.match_score:
-            existing.match_score = match_score
-            existing.reasoning = reasoning
+        if result["match_score"] > existing.match_score:
+            existing.match_score = result["match_score"]
+            existing.reasoning = result["reasoning"]
             existing.session_id = session.id
-            existing.interview_performance_score = ip_score
-            existing.answer_relevance_score = ar_score
-            existing.profile_skills_score = ps_score
-            existing.ats_score = ats
+            existing.interview_performance_score = result["interview_performance_score"]
+            existing.answer_relevance_score = result["answer_relevance_score"]
+            existing.profile_skills_score = result["profile_skills_score"]
+            existing.ats_score = result["ats_score"]
             if existing.status == "withdrawn":
                 existing.status = "applied"
     else:
@@ -871,12 +889,12 @@ def _keep_application(db: Session, session: models.InterviewSession, candidate: 
             candidate_user_id=candidate.id,
             job_id=job.id,
             session_id=session.id,
-            match_score=match_score,
-            reasoning=reasoning,
-            interview_performance_score=ip_score,
-            answer_relevance_score=ar_score,
-            profile_skills_score=ps_score,
-            ats_score=ats,
+            match_score=result["match_score"],
+            reasoning=result["reasoning"],
+            interview_performance_score=result["interview_performance_score"],
+            answer_relevance_score=result["answer_relevance_score"],
+            profile_skills_score=result["profile_skills_score"],
+            ats_score=result["ats_score"],
         ))
 
 
@@ -885,43 +903,66 @@ def _match_practice(db: Session, session: models.InterviewSession, run: models.I
     """For mock interviews: match against active jobs in the same industry (the 4-component scoring).
 
     The interview is already complete when this runs, and no page waits on these records, so it
-    does what fits in the time left and stops.
+    does what fits in the time left and stops. A practice with too few questions answered is not matched.
     """
-    for batch in _batches(_open_roles(db, session, set()), SCORERS):
+    if not _complete(run):
+        return
+    for batch in _batches(_open_roles(db, session, set()), ROLES_AT_ONCE):
         if time.monotonic() >= deadline:
             break
-        for job, result in zip(batch, _score_roles(session, candidate, questions, batch)):
-            _keep_match(db, session, candidate, job, result)
+        results = _score_roles(db, session, run, candidate, questions, batch)
+        for job, result in zip(batch, results):
+            if result is not None and not scoring.is_busy(result):
+                _keep_match(db, session, candidate, job, result)
         run.finishing_at = datetime.utcnow()
         db.commit()
+        if scoring.wait_for(results):
+            break
 
 
 def _match_weekly(db: Session, session: models.InterviewSession, run: models.InterviewRun, candidate: models.User,
                   questions: List[models.InterviewQuestion], deadline: float) -> bool:
     """For connecting interviews: score against all active jobs in the same industry
-    and create Application records for matches scoring >= 40.
+    and create Application records for matches that reach the line.
 
     Saved after every few roles, with a note of which roles are done, so a request that stops
     part-way loses nothing and the next one does not score a role twice.
     True when every role is done. False when the time allowed ran out first.
-    Raises 502 when scoring a role failed, until enough tries have been made to fall back.
+    Raises 502 when scoring a role failed, until enough tries have been made to leave it out.
     """
+    if not _complete(run):
+        return True  # too few questions were answered: nothing is sent, so there is nothing to score against
+
     done = set(run.matched_jobs or [])
     last_try = (run.scoring_tries or 0) >= MAX_SCORING_TRIES - 1
     failed = 0
+    left_out = 0
     jobs = _open_roles(db, session, done)
-    for batch in _batches(jobs, SCORERS):
+    for batch in _batches(jobs, ROLES_AT_ONCE):
         if time.monotonic() >= deadline:
             break
-        for job, result in zip(batch, _score_roles(session, candidate, questions, batch)):
+        results = _score_roles(db, session, run, candidate, questions, batch)
+        for job, result in zip(batch, results):
+            if scoring.is_busy(result):
+                continue  # not scored yet, and not a failure: the next request takes it up
             if result is None and not last_try:
                 failed += 1
                 continue
-            _keep_application(db, session, candidate, job, result)
+            if result is None:
+                # A match score means the same thing for everyone. A role that cannot be scored
+                # gets no score made up for it: nothing is sent, and the results say so.
+                left_out += 1
+            else:
+                _keep_application(db, session, candidate, job, result)
             done.add(job.id)
         run.matched_jobs = sorted(done)
+        if left_out:
+            run.scorecard = {**(run.scorecard or {}), "unscored_roles": ((run.scorecard or {}).get("unscored_roles") or 0) + left_out}
+            left_out = 0
         run.finishing_at = datetime.utcnow()
         db.commit()
+        if _held_up(results, deadline):
+            break
 
     if all(job.id in done for job in jobs):
         return True
@@ -964,7 +1005,7 @@ def get_results(
         if not applied:
             raise HTTPException(status_code=403, detail="Access denied")
 
-    return _results(session, _questions(db, session_id))
+    return _results(session, _questions(db, session_id), for_company=current_user.role != "candidate")
 
 
 @router.get("/", response_model=List[schemas.SessionSummary])
@@ -988,5 +1029,10 @@ def list_my_sessions(
             session.status == "in_progress" and run and run.begun_at and run.current_order >= len(session.questions) > 0
         )
         summary.delivery = rules.delivery_headline(run.delivery) if run and session.session_type == "mock" else None
+        card = run.scorecard if run and isinstance(run.scorecard, dict) else None
+        if card and session.status == "completed":
+            summary.answered = (card.get("completion") or {}).get("answered")
+            summary.question_count = (card.get("completion") or {}).get("total")
+            summary.incomplete = not (card.get("completion") or {}).get("complete", True)
         summaries.append(summary)
     return summaries

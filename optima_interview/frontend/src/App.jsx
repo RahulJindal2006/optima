@@ -10,6 +10,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const InterviewPage = lazy(() => import('./pages/InterviewPage'))
 const ResultsPage = lazy(() => import('./pages/ResultsPage'))
 const GradingRubric = lazy(() => import('./pages/GradingRubric'))
+const ScoringCheck = lazy(() => import('./pages/ScoringCheck'))
 const CandidateProfile = lazy(() => import('./pages/CandidateProfile'))
 const JobPostingsPage = lazy(() => import('./pages/JobPostingsPage'))
 const InterviewHub = lazy(() => import('./pages/InterviewHub'))
@@ -53,6 +54,8 @@ function App() {
 
         <Route path="/dashboard" element={signedIn(<Dashboard />)} />
         <Route path="/rubric" element={signedIn(<GradingRubric />)} />
+        {/* for the site's owner: asks for the server's admin key before it does anything */}
+        <Route path="/scoring-check" element={signedIn(<ScoringCheck />)} />
 
         <Route path="/profile" element={candidate(<CandidateProfile />)} />
         <Route path="/job-postings" element={candidate(<JobPostingsPage />)} />

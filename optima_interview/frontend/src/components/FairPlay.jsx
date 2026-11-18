@@ -1,4 +1,4 @@
-import { fairPlayLines } from '../lib/fairplay'
+import { cameraLine, fairPlayLines } from '../lib/fairplay'
 import { plural } from '../lib/format'
 import Icon from './Icon'
 
@@ -11,7 +11,11 @@ export default function FairPlay({ record, compact = false, missing = 'No record
     return (
       <p className={`fairplay clean ${compact ? 'compact' : ''}`}>
         <Icon name="check" size={18} />
-        <span>{compact ? 'Clean interview' : 'Stayed in the interview window from start to finish. No paste attempts.'}</span>
+        <span>
+          {compact
+            ? 'Clean interview'
+            : `Stayed in the interview window from start to finish. No paste attempts.${cameraLine(record) ? ` ${cameraLine(record)}` : ''}`}
+        </span>
       </p>
     )
   }

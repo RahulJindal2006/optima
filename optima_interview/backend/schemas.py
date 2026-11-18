@@ -306,6 +306,7 @@ class OutlineItem(BaseModel):
     question_order: int
     question_type: str
     seconds: int
+    category: Optional[str] = None   # "general" | "role" | "long" | "code"
 
 
 class InterviewRules(BaseModel):
@@ -357,7 +358,8 @@ class AnswerIn(BaseModel):
     attempt: str
     question_id: int
     answer: str = ""
-    signals: Optional[dict] = None   # counts from the page: typed, dictated, pastes
+    # from the page: characters typed and dictated, paste attempts, what the camera saw (seconds), voice heard (seconds)
+    signals: Optional[dict] = None
 
 
 class AnswerResponse(BaseModel):
@@ -392,7 +394,7 @@ class PingResponse(BaseModel):
 
 class FinishIn(BaseModel):
     attempt: Optional[str] = None
-    delivery: Optional[dict] = None   # coach numbers (practice only)
+    delivery: Optional[dict] = None   # what the camera coach measured, as numbers
     # Scoring stops and reports back after this many seconds; the page then asks again and it
     # carries on where it stopped. The server has its own limit, which this can only shorten.
     budget_seconds: Optional[float] = None
@@ -406,6 +408,8 @@ class FairPlay(BaseModel):
     late_answers: int
     manipulation_answers: int
     unexplained_answers: int
+    voice_mismatch_answers: int = 0          # dictated text with almost no voice behind it
+    camera: Optional[dict] = None            # time off camera, time looking away, a second person; None before the camera was required
     ended_reason: Optional[str] = None
     clean: bool
 
@@ -430,8 +434,12 @@ class QuestionResult(BaseModel):
     key_points_hit: Optional[List[str]]
     question_order: int
     seconds: Optional[int] = None    # time spent on it
+    seconds_allowed: Optional[int] = None
+    category: Optional[str] = None   # "general" | "role" | "long" | "code"
     late: bool = False               # the answer arrived after the clock ran out, so it was not counted
-    flagged: Optional[str] = None    # "manipulation" | "unexplained"
+    ungraded: bool = False           # the grader failed on it: left out of the score
+    flagged: Optional[str] = None    # "manipulation" | "unexplained" | "voice"
+    rubric: Optional[dict] = None    # the scorecard: each line, the level picked, what it earned
 
     class Config:
         from_attributes = True
@@ -450,7 +458,8 @@ class InterviewResultResponse(BaseModel):
     ended_reason: Optional[str] = None       # set when the interview ended early
     awaiting_scoring: bool = False           # every answer is in, scoring has not finished
     fair_play: Optional[FairPlay] = None     # weekly interviews only
-    delivery: Optional[dict] = None          # practice interviews taken with the camera coach
+    delivery: Optional[dict] = None          # what the camera coach measured: shown to the candidate only
+    scorecard: Optional[dict] = None         # how the score was reached: questions answered, what the camera cost
 
     class Config:
         from_attributes = True
@@ -467,6 +476,9 @@ class SessionSummary(BaseModel):
     ended_reason: Optional[str] = None
     awaiting_scoring: bool = False           # every answer is in, scoring has not finished
     delivery: Optional[dict] = None          # eye contact and posture, for the trend across practices
+    answered: Optional[int] = None           # questions answered, of `question_count`
+    question_count: Optional[int] = None
+    incomplete: bool = False                 # too few questions were answered for it to be sent anywhere
 
     class Config:
         from_attributes = True

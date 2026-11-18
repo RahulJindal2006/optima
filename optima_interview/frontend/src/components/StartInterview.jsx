@@ -64,8 +64,9 @@ export function WeeklyStart({ availability, savedIds = [] }) {
       <div className="start-text">
         <h2>Your weekly interview is ready</h2>
         <p>
-          {LIMITS.weeklyQuestions} questions built from your {plural(savedIds.length, 'saved role')}. Up to{' '}
-          {Math.round((LIMITS.weeklyQuestions * LIMITS.verbalSeconds) / 60)} minutes.
+          {LIMITS.weeklyQuestions} questions: {LIMITS.weeklyGeneral} that everyone is asked, and{' '}
+          {LIMITS.weeklyRole + LIMITS.weeklyLong} built from your {plural(savedIds.length, 'saved role')}. Up to{' '}
+          {LIMITS.weeklyMinutes} minutes, on camera.
         </p>
       </div>
       <button type="button" className="btn primary" onClick={() => setAsking(true)}>
@@ -89,19 +90,30 @@ export function WeeklyStart({ availability, savedIds = [] }) {
         >
           <ul className="plain-list">
             <li>
-              {LIMITS.weeklyQuestions} questions, one at a time, five minutes each. When the time runs out your answer
-              is sent and the next question starts. You cannot go back.
+              {LIMITS.weeklyQuestions} questions, one at a time. Most get two to two and a half minutes, the last two
+              get five or six. When the time runs out your answer is sent and the next question starts. You cannot go
+              back.
+            </li>
+            <li>
+              It is taken on camera, with your microphone on. Both are checked before the first question, and the
+              interview cannot begin without them. No video or sound is saved or sent.
             </li>
             <li>
               It runs in full screen. Leaving the window is recorded, and the third time ends the interview. Pasting
               is turned off.
+            </li>
+            <li>
+              A skipped question scores 0. Answer fewer than three quarters of the questions and nothing is sent.
             </li>
             <li>Closing the page part-way ends it with a score of 0, and nothing is sent.</li>
             <li>
               Your answers are scored against every open role in the same field as your saved roles. Wherever you
               score {SEND_AT} or more, your application is sent.
             </li>
-            <li>You get one of these every {LIMITS.weeklyEveryDays} days. Starting uses it.</li>
+            <li>
+              You get one of these every {LIMITS.weeklyEveryDays} days. It is used when you begin, after the camera and
+              microphone check.
+            </li>
           </ul>
         </Modal>
       )}
@@ -221,9 +233,9 @@ export function PracticeStart({ job, usedToday, label = 'Start a practice interv
             <ul className="plain-list">
               <li>
                 {LIMITS.practiceQuestions} questions, plus {LIMITS.practiceCodeQuestions} coding questions for technical
-                roles. Five minutes each, ten for coding.
+                roles. Two to two and a half minutes each, six for coding.
               </li>
-              <li>Every answer comes back with a score, what you covered and what you missed.</li>
+              <li>Every answer comes back with its scorecard: each line, the level it reached, and what would raise it.</li>
               <li>You can turn on a coach for tips on eye contact, posture and how you sound.</li>
               <li>
                 Up to {LIMITS.practicePerDay} a day

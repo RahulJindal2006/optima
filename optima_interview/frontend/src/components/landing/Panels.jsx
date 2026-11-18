@@ -2,10 +2,11 @@ import Icon from '../Icon'
 import QuestionFrame from '../QuestionFrame'
 import ScoreLine from '../ScoreLine'
 import ScoreParts from '../ScoreParts'
+import { LIMITS } from '../../lib/flags'
 import { PARTS, SEND_AT } from '../../lib/score'
 import { ANSWER, APPLICANTS, COMPANY_QUESTIONS, FEEDBACK, QUESTION, REASONING, ROLES } from './sample'
 
-const TIMER = { __html: [...'04:12'].map((c) => (/\d/.test(c) ? `<span class="d">${c}</span>` : `<span>${c}</span>`)).join('') }
+const TIMER = { __html: [...'01:42'].map((c) => (/\d/.test(c) ? `<span class="d">${c}</span>` : `<span>${c}</span>`)).join('') }
 const WORDS = ANSWER.trim().split(/\s+/).length
 const TOP = ROLES[0]
 const SUM = PARTS.map((p, i) => `${p.weight.toFixed(2)} × ${TOP.parts[i]}`).join(' + ')
@@ -17,10 +18,10 @@ export function PanelInterview() {
     <div className="panel-ui">
       <QuestionFrame
         as="p"
-        index={3}
-        total={8}
+        index={9}
+        total={LIMITS.weeklyQuestions}
         question={QUESTION}
-        timer={<span className="digits" data-paint="timer" data-from="300" data-to="252" dangerouslySetInnerHTML={TIMER} />}
+        timer={<span className="digits" data-paint="timer" data-from={LIMITS.seconds.role} data-to={LIMITS.seconds.role - 48} dangerouslySetInnerHTML={TIMER} />}
         foot={
           <>
             <span>

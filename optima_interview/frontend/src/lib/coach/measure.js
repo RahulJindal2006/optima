@@ -28,6 +28,15 @@ export const RULES = {
   restless: 0.45, // head heights moved per second, smoothed
   dim: 65, // brightness of the face, 0 to 255
   backlit: 55, // how much brighter the background may be than the face
+  // Away from the screen, for the record a weekly interview keeps. Wider than the limits for eye contact
+  // above: reading the question, watching the answer appear and looking at the keyboard are all on the
+  // screen side of these. Only a head or eyes turned well clear of the screen counts.
+  // The face model reads a sideways turn as about two thirds of what it is (a head turned 30 degrees reads
+  // as 20), so 20 here is a head turned about 30 degrees: past the edge of a screen, towards something beside it.
+  offScreenTurn: [20, 28], // degrees the head may turn sideways, and upwards (looking up to think is common)
+  offScreenDown: 32, // downwards: the keyboard is below the screen, a lap or a desk drawer is further
+  offScreenEyes: 0.62, // how far the eyes may slide sideways
+  blurred: 4, // sharpness of the face (see tracker.js) below which the picture is too soft to read
 }
 
 // Which way the head points, from the 4x4 matrix MediaPipe gives (column by column).
@@ -56,11 +65,29 @@ function eyeTurn(shapes) {
   }
 }
 
+// Which face in the picture is the candidate's: the largest one. Returns its place in the list, or -1.
+function nearest(faces, aspect) {
+  let best = -1
+  let bestSize = 0
+  faces.forEach((points, i) => {
+    if (!points || points.length < 468) return
+    const size = Math.hypot((points[CHIN].x - points[FOREHEAD].x) * aspect, points[CHIN].y - points[FOREHEAD].y)
+    if (size > bestSize) {
+      best = i
+      bestSize = size
+    }
+  })
+  return best
+}
+
 // One frame, measured. Null when no face was found.
 // `aspect` is the picture's width over its height: landmarks come as shares of each.
+// When there is more than one face, the largest is measured and `faces` says how many there were.
 export function observe(result, aspect = 4 / 3) {
-  const points = result?.faceLandmarks?.[0]
-  if (!points || points.length < 468) return null
+  const all = result?.faceLandmarks || []
+  const which = nearest(all, aspect)
+  if (which < 0) return null
+  const points = all[which]
 
   let minX = 1
   let maxX = 0
@@ -85,8 +112,9 @@ export function observe(result, aspect = 4 / 3) {
     size: Math.hypot((chin.x - top.x) * aspect, chin.y - top.y),
     cut: minX < 0.005 || maxX > 0.995 || minY < 0.005 || maxY > 0.995,
     roll: deg(Math.atan2(left.y - right.y, (left.x - right.x) * aspect)),
-    ...headTurn(result.facialTransformationMatrixes?.[0]?.data),
-    ...eyeTurn(result.faceBlendshapes?.[0]?.categories),
+    ...headTurn(result.facialTransformationMatrixes?.[which]?.data),
+    ...eyeTurn(result.faceBlendshapes?.[which]?.categories),
+    faces: all.filter((face) => face && face.length >= 468).length,
   }
 }
 
@@ -127,10 +155,22 @@ export function judge(obs, base) {
   const down = tipped < -RULES.headDown || lifted < -RULES.eyeTurn
   const up = tipped > RULES.headTurn[1] || lifted > RULES.eyeTurn
   const facing = !side && !down && !up
+  // turned well clear of the screen (for the weekly interview's record): judged the same way whether or
+  // not the person is typing, which is why the limits are wide
+  const offScreen =
+    Math.abs(turned) > RULES.offScreenTurn[0] || Math.abs(slid) > RULES.offScreenEyes
+      ? 'side'
+      : tipped > RULES.offScreenTurn[1]
+        ? 'up'
+        : tipped < -RULES.offScreenDown
+          ? 'down'
+          : null
 
   return {
     present: true,
     away: facing ? null : side ? 'side' : down ? 'down' : 'up', // which way the eyes went
+    offScreen, // null, or which way: 'side', 'up' or 'down'
+    others: (obs.faces || 1) > 1, // a second face is in the picture
     // how far the head sits below where it started, in head heights (for sinking slowly over an interview)
     drop: base ? (obs.cy - base.cy) / base.size : null,
     // seen from below or from above: only judged while the person is more or less facing the camera
@@ -150,6 +190,12 @@ export function judge(obs, base) {
     distanceOk: !close && !far,
     upright: !tilted && !sunk && !leaning,
   }
+}
+
+// True when the face is too soft to read: a smeared lens, a cover over the camera, a camera out of focus.
+// `light.sharp` is how much fine detail the face holds (tracker.js); it is missing where it could not be measured.
+export function judgeBlur(light) {
+  return light?.sharp != null && light.sharp < RULES.blurred
 }
 
 // How the face is lit, from the average brightness of the face and of everything around it (0 to 255).

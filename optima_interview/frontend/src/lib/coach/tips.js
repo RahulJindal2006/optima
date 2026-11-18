@@ -10,9 +10,12 @@ import { VOICE } from './voice.js'
 // The wait means a glance away or a shift in the chair never sets one off.
 const LIVE = [
   ['absent', 2000, 0],
+  ['others', 1500, 0],
   ['cut', 2500, 0],
+  ['blurred', 5000, 0],
   ['dim', 5000, 0],
   ['backlit', 5000, 0],
+  ['offScreen', 2500, 0],
   ['loud', 2000, 0],
   ['close', 3000, 0],
   ['far', 3000, 0],
@@ -35,7 +38,7 @@ const LIVE = [
 ]
 
 // Without these being right nothing else can be judged, so they are said at once and stay up until fixed.
-const URGENT = new Set(['absent', 'cut', 'dim', 'backlit', 'loud', 'close', 'far'])
+const URGENT = new Set(['absent', 'others', 'cut', 'blurred', 'dim', 'backlit', 'offScreen', 'loud', 'close', 'far'])
 
 // How the coach paces itself, in milliseconds. A coach that talks all the time gets ignored.
 export const PACING = {
@@ -51,6 +54,9 @@ export const PACING = {
 // ({ pace, fillers, word }) when it quotes a number.
 export const TIP_TEXT = {
   absent: ['Move into the picture', 'The camera cannot find your face.'],
+  others: ['Be alone in the picture', 'A second face is in view. An interview is taken alone.'],
+  blurred: ['Wipe the camera lens', 'The picture is too blurred to read. Check that nothing covers the camera.'],
+  offScreen: ['Eyes back to the screen', 'You have turned away from the screen.'],
   cut: ['Move toward the middle', 'Part of your face is outside the picture.'],
   dim: ['Add light in front of you', 'Your face is too dark to read.'],
   backlit: ['Turn to face the light', 'The light is behind you, so your face is in shadow.'],
@@ -90,6 +96,9 @@ export function tipText(key, facts = {}) {
 // What is said for a moment when a tip has been acted on. A tip with no line here just goes away.
 export const BETTER_TEXT = {
   absent: 'In the picture',
+  others: 'Alone in the picture',
+  blurred: 'Sharp picture',
+  offScreen: 'Back on the screen',
   cut: 'In the picture',
   dim: 'Good light',
   backlit: 'Good light',
@@ -114,15 +123,21 @@ export const BETTER_TEXT = {
 
 // Which problems a frame has, as the keys used above.
 // `eyes` is false while looking away says nothing: before the interview, while typing, while reading a question.
-export function problems(flags, { eyes = true } = {}) {
-  if (!flags.present) return ['absent']
+// `strict` is the weekly interview: turning well away from the screen is a problem whatever the person is doing.
+export function problems(flags, { eyes = true, strict = false } = {}) {
+  // with no face in the picture nothing else can be judged, except that the picture itself is dark
+  if (!flags.present) return flags.light === 'dim' ? ['absent', 'dim'] : ['absent']
   const found = []
+  if (flags.others) found.push('others')
+  if (flags.blurred) found.push('blurred')
+  if (strict && flags.offScreen) found.push('offScreen')
   for (const key of ['cut', 'close', 'far', 'offCentre', 'eyesLow', 'eyesHigh', 'cameraLow', 'cameraHigh', 'sunk', 'leaning', 'tilted', 'restless']) {
     if (flags[key]) found.push(key)
   }
   if (flags.light === 'dim') found.push('dim')
   if (flags.light === 'backlit') found.push('backlit')
-  if (eyes && !flags.facing) found.push(flags.away === 'down' ? 'awayDown' : flags.away === 'up' ? 'awayUp' : 'awaySide')
+  // "eyes back to the screen" already covers it: one tip for one thing
+  if (eyes && !flags.facing && !found.includes('offScreen')) found.push(flags.away === 'down' ? 'awayDown' : flags.away === 'up' ? 'awayUp' : 'awaySide')
   return found
 }
 
@@ -219,13 +234,15 @@ export function createTipper() {
 
 // The three lines the coach shows all the time while you answer: where your eyes are, how you are sitting,
 // and how you sound. Each is { key, label, text, ok } with ok true, false, or null when it cannot be judged.
-export function statusLines({ flags, eyes, why, voice, dictating, canDictate, mic }) {
+export function statusLines({ flags, eyes, why, voice, dictating, canDictate, mic, strict = false }) {
   const lines = []
   if (!flags?.present) {
     lines.push({ key: 'eyes', label: 'Eyes', text: 'Out of the picture', ok: false })
     lines.push({ key: 'posture', label: 'Posture', text: 'Out of the picture', ok: false })
   } else {
-    if (!eyes) {
+    if (strict && flags.offScreen) {
+      lines.push({ key: 'eyes', label: 'Eyes', text: 'Away from the screen', ok: false })
+    } else if (!eyes) {
       const text = why === 'typing' ? 'Not judged while you type' : why === 'reading' ? 'Not judged while you read' : 'Finding where you look'
       lines.push({ key: 'eyes', label: 'Eyes', text, ok: null })
     } else if (flags.facing) {

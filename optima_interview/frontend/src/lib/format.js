@@ -132,3 +132,10 @@ export const STATUS_FOR_COMPANY = {
   contacted: 'Contacted',
   withdrawn: 'Withdrawn',
 }
+
+// Seconds as minutes, in words a sentence can hold: 120 is "2", 150 is "2½", 360 is "6".
+export function minutesOf(seconds) {
+  const halves = Math.round((Number(seconds) || 0) / 30)
+  const whole = Math.floor(halves / 2)
+  return halves % 2 ? `${whole || ''}½` : String(whole)
+}

@@ -29,7 +29,7 @@ export function loadTracker() {
         {
           baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
           runningMode: 'VIDEO',
-          numFaces: 1,
+          numFaces: 2, // the second is only counted: a weekly interview records when someone else is in the picture
           outputFaceBlendshapes: true,
           outputFacialTransformationMatrixes: true,
         },
@@ -75,6 +75,48 @@ function measureLight(pen, video, seen) {
   return { face: faceCount ? face / faceCount : all, around: aroundCount ? around / aroundCount : all }
 }
 
+// How much fine detail the face holds. The spread of the differences between each point and its neighbours
+// (the variance of a Laplacian) over a small grey copy of the face, as a share of the spread of the face's
+// own brightness, times 100. Dividing by the second makes it a measure of sharpness alone: a dim picture
+// has less of both and scores the same as a bright one. Measured on test pictures: a sharp face scores
+// about 40, a slightly soft and noisy one about 25, one blurred by 2 pixels about 8, by 4 pixels under 2.
+// Null when there is no face.
+const SHARP_SIDE = 64
+
+function measureSharpness(pen, video, seen) {
+  const box = seen?.box
+  if (!box) return null
+  const sx = Math.max(0, box[0]) * video.videoWidth
+  const sy = Math.max(0, box[1]) * video.videoHeight
+  const sw = (Math.min(1, box[2]) - Math.max(0, box[0])) * video.videoWidth
+  const sh = (Math.min(1, box[3]) - Math.max(0, box[1])) * video.videoHeight
+  if (sw < 24 || sh < 24) return null
+  const N = SHARP_SIDE
+  pen.drawImage(video, sx, sy, sw, sh, 0, 0, N, N)
+  const { data } = pen.getImageData(0, 0, N, N)
+  const grey = new Float32Array(N * N)
+  for (let i = 0; i < N * N; i += 1) grey[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]
+  let sum = 0
+  let squares = 0
+  let count = 0
+  let light = 0
+  let lightSquares = 0
+  for (let y = 1; y < N - 1; y += 1) {
+    for (let x = 1; x < N - 1; x += 1) {
+      const i = y * N + x
+      const edge = 4 * grey[i] - grey[i - 1] - grey[i + 1] - grey[i - N] - grey[i + N]
+      sum += edge
+      squares += edge * edge
+      light += grey[i]
+      lightSquares += grey[i] * grey[i]
+      count += 1
+    }
+  }
+  const detail = squares / count - (sum / count) ** 2
+  const contrast = lightSquares / count - (light / count) ** 2
+  return (100 * detail) / (contrast + 1)
+}
+
 // Starts reading the camera. `getVideo` returns the <video> on the page now (it can change between screens).
 // `onFrame(seen, light, seconds, aspect)` is called a few times a second: `seen` is null when no face was found.
 // Returns a function that stops it.
@@ -84,6 +126,10 @@ export async function startTracking(getVideo, onFrame) {
   canvas.width = 64
   canvas.height = 48
   const pen = canvas.getContext('2d', { willReadFrequently: true })
+  const close = document.createElement('canvas')
+  close.width = SHARP_SIDE
+  close.height = SHARP_SIDE
+  const closePen = close.getContext('2d', { willReadFrequently: true })
 
   let stopped = false
   let timer = 0
@@ -104,13 +150,14 @@ export async function startTracking(getVideo, onFrame) {
         seen = observe(result, aspect)
         cost += (performance.now() - now - cost) * 0.2
         // for tests; not in the built site
-        if (import.meta.env.DEV) window.__coach = { cost: Math.round(cost), seen, points: result.faceLandmarks?.[0] || null }
+        if (import.meta.env.DEV) window.__coach = { cost: Math.round(cost), seen, light, points: result.faceLandmarks?.[0] || null }
       } catch {
         // one unreadable frame is not worth stopping for
       }
       if (now - lightAt >= LIGHT_EVERY_MS) {
         try {
           light = measureLight(pen, video, seen)
+          light.sharp = measureSharpness(closePen, video, seen)
         } catch {
           light = null
         }

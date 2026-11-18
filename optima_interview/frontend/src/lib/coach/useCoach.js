@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { baseline, createMotion, judge, judgeLight } from './measure'
+import { baseline, createMotion, judge, judgeBlur, judgeLight } from './measure'
 import { MIC, startListening } from './microphone'
 import { createTally } from './tally'
 import { createTipper, problems, statusLines, voiceProblems } from './tips'
@@ -14,13 +14,18 @@ const SETTLE_MS = 700
 
 const EARLY_FRAMES = 20
 const CAMERA = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+// Before a weekly interview the picture has to be right, and stay right for this long, before Begin opens.
+const STEADY_MS = 1200
+// What has to be right in the picture for a weekly interview to begin.
+const MUST_NOT = ['absent', 'cut', 'dim', 'backlit', 'blurred', 'others']
 
-const NOTHING = { tip: null, better: null, problems: [], present: false, lines: [], facts: {}, sound: { heard: false, problem: null } }
+const NOTHING = { tip: null, better: null, problems: [], present: false, pictureOk: false, lines: [], facts: {}, sound: { heard: false, problem: null } }
 
 const sameView = (a, b) =>
   a.tip === b.tip &&
   a.better === b.better &&
   a.present === b.present &&
+  a.pictureOk === b.pictureOk &&
   a.sound.heard === b.sound.heard &&
   a.sound.problem === b.sound.problem &&
   a.facts.pace === b.facts.pace &&
@@ -49,9 +54,13 @@ const oneListener =
   typeof navigator !== 'undefined' &&
   (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1))
 
-// The coach for a practice interview. Everything happens in the browser: the camera is read a few times a
-// second and the microphone a few dozen, each look is turned into a handful of numbers, and those numbers
-// are all that is kept. No picture and no sound is saved or sent.
+// The coach. Everything happens in the browser: the camera is read a few times a second and the microphone
+// a few dozen, each look is turned into a handful of numbers, and those numbers are all that is kept.
+// No picture and no sound is saved or sent.
+//
+// In a practice interview it is a choice. In the weekly interview (`strict`) it is a condition: the
+// interview cannot begin until the camera and the microphone are allowed and the picture is right, and the
+// time spent off camera, turned away from the screen, or with a second face in view goes on the record.
 //
 //   status   off | asking (for the camera) | loading (the model) | on | blocked (camera refused) | failed
 //            | unsupported (this page cannot use a camera at all)
@@ -62,7 +71,8 @@ const oneListener =
 //   lines    where the eyes are, how the person is sitting, how they sound: shown all the time while answering
 //   problems everything that is wrong in the picture now (for the checklist before the interview)
 //   sound    before the interview: has the microphone heard a voice, and is anything wrong with it
-export function useCoach() {
+//   pictureOk  before the interview: the face is in the picture, lit, sharp and alone, and has been for a moment
+export function useCoach({ strict = false } = {}) {
   const [status, setStatus] = useState('off')
   const [mic, setMic] = useState('off')
   const [view, setView] = useState(NOTHING)
@@ -94,6 +104,8 @@ export function useCoach() {
     sound: NOTHING.sound,
     soundFor: 0,
     shown: {}, // the always-on lines as they stand, and what each is waiting to change to
+    wrongAt: -Infinity, // when the picture was last not good enough to begin on
+    pictureOk: false,
   })
 
   // What the voice sounds like right now, looked at twice a second (not on every reading: that is 25 a second).
@@ -146,9 +158,12 @@ export function useCoach() {
     }
     const flags = judge(seen, s.base)
     flags.light = judgeLight(light)
+    flags.blurred = flags.present && judgeBlur(light)
     flags.restless = s.motion(seen, seconds, aspect)
     const now = performance.now()
     const typing = now - s.lastKeyAt <= TYPING_MS
+    // looking down while the keys are going is looking at the keyboard, which is part of the interview
+    if (typing && flags.offScreen === 'down') flags.offScreen = null
     const reading = s.reading || (!s.dictating && now - s.askedAt < READ_MS)
     // until there is something to compare with, where the eyes are cannot be judged
     const eyes = Boolean(s.base) && !typing && !reading
@@ -157,14 +172,16 @@ export function useCoach() {
     if (watching) s.tally.add(flags, seconds, { eyes, speaking: eyes && speaking })
 
     // before the interview nobody is asked to look at the camera yet, so looking away is not a problem
-    const found = problems(flags, { eyes: watching && eyes })
+    const found = problems(flags, { eyes: watching && eyes, strict: strict && watching })
+    if (found.some((key) => MUST_NOT.includes(key))) s.wrongAt = now
+    s.pictureOk = now - s.wrongAt >= STEADY_MS
     let said = { tip: null, better: null }
     let lines = []
     if (watching) {
       // the angle of the camera is something to set up beforehand, not to be told about mid-answer
       const wrong = [...found.filter((key) => key !== 'cameraLow' && key !== 'cameraHigh'), ...s.voiceFound]
       said = s.tipper(wrong, now)
-      lines = statusLines({ flags, eyes, why, voice: s.heardNow, dictating: s.dictating, canDictate, mic: micState.current }).map((line) => {
+      lines = statusLines({ flags, eyes, why, voice: s.heardNow, dictating: s.dictating, canDictate, mic: micState.current, strict }).map((line) => {
         const held = s.shown[line.key]
         // the voice line is already an average over many seconds: it has no flicker to wait out
         if (!held || line.key === 'voice') {
@@ -179,9 +196,9 @@ export function useCoach() {
         return { key: held.key, label: held.label, text: held.text, ok: held.ok }
       })
     }
-    const next = { tip: said.tip, better: said.better, problems: found, present: flags.present, lines, facts: s.facts, sound: s.sound }
+    const next = { tip: said.tip, better: said.better, problems: found, present: flags.present, pictureOk: s.pictureOk, lines, facts: s.facts, sound: s.sound }
     setView((old) => (sameView(old, next) ? old : next))
-  }, [])
+  }, [strict])
 
   const release = useCallback(() => {
     stopTracking.current?.()
@@ -236,6 +253,16 @@ export function useCoach() {
       media.getTracks().forEach((track) => track.stop())
       return
     }
+    if (strict && oneListener) {
+      // The microphone is left to dictation on these devices, but the weekly interview still needs it
+      // allowed before it begins, so that dictation never has to ask part-way through. Ask, then let go.
+      try {
+        const once = await navigator.mediaDevices.getUserMedia({ audio: true })
+        once.getTracks().forEach((track) => track.stop())
+      } catch (refusal) {
+        heard = refusal?.name === 'NotAllowedError' || refusal?.name === 'SecurityError' ? 'blocked' : 'none'
+      }
+    }
     stream.current = media
     if (video.current) video.current.srcObject = media
     if (heard === 'on') {
@@ -251,6 +278,8 @@ export function useCoach() {
     micState.current = heard
     setMic(heard)
 
+    live.current.wrongAt = performance.now()
+    live.current.pictureOk = false
     setStatus('loading')
     try {
       loaded.current = true
@@ -270,7 +299,7 @@ export function useCoach() {
       setMic('off')
       setStatus('failed')
     }
-  }, [onFrame, onSound, release])
+  }, [onFrame, onSound, release, strict])
 
   // The <video> on the page. It is a different element on different screens: each one gets the same camera.
   const attach = useCallback((element) => {
@@ -356,6 +385,24 @@ export function useCoach() {
     live.current.lastKeyAt = performance.now()
   }, [])
 
+  // What was seen and heard during the question being answered now, to send with its answer (weekly):
+  // seconds on camera, turned away, with a second face; and seconds of voice the microphone heard while
+  // dictating (only where a microphone was timing it). Null when the coach is not watching.
+  const seen = useCallback(() => {
+    const s = live.current
+    if (!s.tally) return null
+    const out = { cam: s.tally.seen() }
+    const now = s.voice?.now()
+    if (now?.metered) out.talk = Math.round(now.talk * 10) / 10
+    return out
+  }, [])
+
+  // True when the camera has stopped delivering a picture (unplugged, taken by another program).
+  const lost = useCallback(() => {
+    const track = stream.current?.getVideoTracks?.()[0]
+    return Boolean(wanted.current && (!track || track.readyState === 'ended'))
+  }, [])
+
   // The page tells the coach when the person is answering aloud, what dictation heard, and when the
   // question is being read out (which is not the person speaking).
   const dictating = useCallback((on) => {
@@ -417,6 +464,9 @@ export function useCoach() {
     sound: view.sound,
     problems: view.problems,
     present: view.present,
+    pictureOk: view.pictureOk,
+    seen,
+    lost,
     attach,
     turnOn,
     turnOff,

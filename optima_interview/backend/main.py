@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 
 from database import init_db
-from routers import auth, interviews, jobs, matches, profile, favourites, applications, tts
+from routers import auth, interviews, jobs, matches, profile, favourites, applications, scoring, tts
 
 # ALLOWED_ORIGINS: comma-separated list of frontend origins, or "*" for local dev.
 # In production set this env var to your Vercel frontend URL, e.g.:
@@ -88,6 +88,7 @@ app.include_router(matches.router)
 app.include_router(profile.router)
 app.include_router(favourites.router)
 app.include_router(applications.router)
+app.include_router(scoring.router)
 app.include_router(tts.router)
 
 

@@ -18,9 +18,11 @@ import Icon from '../components/Icon'
 import Logo from '../components/Logo'
 import Modal from '../components/Modal'
 import QuestionFrame from '../components/QuestionFrame'
+import { coachReady } from '../lib/coach/ready'
 import { useCoach } from '../lib/coach/useCoach'
+import { addPhrase, canPunctuate, closeDictation, withInterim } from '../lib/dictation'
 import { INTERVIEWS_ENABLED, LIMITS } from '../lib/flags'
-import { countWords, formatDay, parseTime, plural } from '../lib/format'
+import { countWords, formatDay, minutesOf, parseTime, plural } from '../lib/format'
 import { useLockdown } from '../lib/useLockdown'
 import '../styles/interview.css'
 
@@ -41,6 +43,9 @@ const SETTLE_SECONDS = 3
 
 // Turns the server's refusal into something a person can act on.
 function explain(err, weekly) {
+  if (err.status === 429 && weekly && /without being begun/.test(err.message)) {
+    return { title: 'Try again tomorrow', text: err.message }
+  }
   if (err.status === 429 && weekly) {
     const when = parseTime(/Next available:\s*(\S+)/.exec(err.message)?.[1])
     return {
@@ -60,7 +65,7 @@ function explain(err, weekly) {
   if (err.status === 410) {
     return {
       title: 'This interview has closed',
-      text: `It was not begun within ${LIMITS.beginWithinMinutes} minutes of its questions being written.`,
+      text: `It was not begun within ${LIMITS.beginWithinMinutes} minutes of its questions being written.${weekly ? ' Your week was not used: you can start again.' : ''}`,
     }
   }
   if (err.status === 409) {
@@ -130,6 +135,7 @@ export default function InterviewPage() {
   const [voiceWorks, setVoiceWorks] = useState(true)
   const [dictating, setDictating] = useState(false)
   const [dictationProblem, setDictationProblem] = useState('')
+  const [cameraLost, setCameraLost] = useState(false)
 
   const asked = useRef(false)
   const attempt = useRef(null)
@@ -143,10 +149,13 @@ export default function InterviewPage() {
   const audioUrl = useRef(null)
   const recognition = useRef(null)
   const spoken = useRef('')
+  const phrase = useRef({ endedAt: 0, startedAt: 0, punctuated: false }) // when the last phrase ended and this one began
   const answerBox = useRef(null)
 
-  const coach = useCoach()
-  const coachShown = !weekly && ['asking', 'loading', 'on'].includes(coach.status)
+  // In the weekly interview the camera and microphone are a condition, and what they see is recorded.
+  const coach = useCoach({ strict: weekly })
+  const coachShown = ['asking', 'loading', 'on'].includes(coach.status)
+  const checked = coachReady(coach)
   const locked = Boolean(session?.locked)
   const left = deadline == null ? 0 : Math.max(0, Math.ceil((deadline - now) / 1000))
   const last = question != null && session != null && question.question_order === session.count - 1
@@ -246,6 +255,11 @@ export default function InterviewPage() {
       recognition.current.onend = null
       recognition.current.stop()
       recognition.current = null
+      // the last sentence is closed where the speaker left it open, and that full stop counts as dictated
+      const closed = closeDictation(spoken.current, phrase.current)
+      signals.current.dictated += closed.length - spoken.current.length
+      spoken.current = closed
+      setAnswer(closed)
     }
     setDictating(false)
     coach.dictating(false)
@@ -260,22 +274,34 @@ export default function InterviewPage() {
     engine.continuous = true
     engine.interimResults = true
     engine.lang = 'en-US'
+    // Newer browsers can punctuate from the way a sentence is spoken. Where they cannot, full stops are put
+    // at the speaker's pauses and capitals after them (lib/dictation.js).
+    const punctuated = canPunctuate(engine)
+    if (punctuated) engine.unspokenPunctuation = true
     if (!again) spoken.current = answer
+    phrase.current = { endedAt: 0, startedAt: 0, punctuated }
     const heardBefore = coach.spoken()
     let restart = false
 
     engine.onresult = (event) => {
       let interim = ''
       let settled = ''
+      const now = performance.now()
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const heard = event.results[i][0].transcript
         if (event.results[i].isFinal) {
-          spoken.current = `${spoken.current}${spoken.current ? ' ' : ''}${heard.trim()}`
-          signals.current.dictated += heard.trim().length + 1
+          const at = phrase.current
+          // how long the speaker was silent between the end of the last phrase and the start of this one
+          const pauseMs = at.endedAt && at.startedAt > at.endedAt ? at.startedAt - at.endedAt : 0
+          const before = spoken.current
+          spoken.current = addPhrase(before, heard, { pauseMs, punctuated })
+          signals.current.dictated += Math.max(0, spoken.current.length - before.length)
+          phrase.current = { ...at, endedAt: now, startedAt: 0 }
           settled += ` ${heard}`
         } else interim += heard
       }
-      setAnswer(interim ? `${spoken.current}${spoken.current ? ' ' : ''}${interim}` : spoken.current)
+      if (interim && !phrase.current.startedAt) phrase.current.startedAt = now
+      setAnswer(withInterim(spoken.current, interim))
       coach.heard(settled.trim(), interim) // for pace and filler words: counted, not kept
     }
     engine.onerror = (event) => {
@@ -298,7 +324,10 @@ export default function InterviewPage() {
         startDictation(true)
         return
       }
-      setAnswer(spoken.current)
+      const closed = closeDictation(spoken.current, phrase.current)
+      signals.current.dictated += closed.length - spoken.current.length
+      spoken.current = closed
+      setAnswer(closed)
       setDictating(false)
       coach.dictating(false)
     }
@@ -334,7 +363,7 @@ export default function InterviewPage() {
     setScoreProblem('')
     setPhase('scoring')
     lock.exit()
-    delivery.current ??= coach.finish()
+    delivery.current ??= coach.finish() // the coach's own numbers: shown to the candidate, never to a company
     coach.turnOff()
     try {
       // scoring may take more than one request: this keeps asking until it is done
@@ -357,7 +386,8 @@ export default function InterviewPage() {
     setSending(true)
     setSendProblem('')
     const body = { attempt: attempt.current, question_id: question.id, answer }
-    if (locked) body.signals = { ...signals.current }
+    // with a weekly answer goes how it was written, and what the camera and microphone saw and heard (numbers only)
+    if (locked) body.signals = { ...signals.current, ...(coach.seen() || {}) }
 
     let res = null
     let refusal = null
@@ -395,7 +425,7 @@ export default function InterviewPage() {
   }
 
   const begin = async () => {
-    if (starting) return
+    if (starting || (weekly && !checked)) return
     setStarting(true)
     attempt.current ??= newAttempt()
     if (locked) await lock.enter() // must follow the click directly, or the browser refuses full screen
@@ -425,6 +455,7 @@ export default function InterviewPage() {
   const tick = useEffectEvent(() => {
     const time = Date.now()
     setNow(time)
+    if (phase === 'interview' && weekly) setCameraLost(coach.lost())
     if (phase === 'interview' && deadline != null && time >= deadline) send()
   })
 
@@ -547,6 +578,8 @@ export default function InterviewPage() {
       attach={coach.attach}
       mode={phase === 'interview' ? 'live' : phase === 'settling' ? 'settle' : 'setup'}
       count={count}
+      required={weekly}
+      lost={cameraLost}
     />
   ) : null
 
@@ -612,6 +645,22 @@ export default function InterviewPage() {
     const minutes = Math.round(session.outline.reduce((sum, q) => sum + q.seconds, 0) / 60)
     const minutesToBegin = Math.max(0, Math.ceil((session.beginBy - now) / 60000))
     const settling = phase === 'settling'
+    // the time limits, read from the questions themselves: most get two or three minutes, the last ones more
+    const long = session.outline.filter((q) => q.category === 'long' || q.category === 'code')
+    const short = session.outline.filter((q) => !long.includes(q)).map((q) => q.seconds)
+    const least = short.length ? Math.min(...short) : 0
+    const most = short.length ? Math.max(...short) : 0
+    const longest = long.length ? Math.max(...long.map((q) => q.seconds)) : 0
+    const limits =
+      (short.length
+        ? least === most
+          ? `${minutesOf(least)} minutes for ${long.length ? 'most questions' : 'each question'}`
+          : `${minutesOf(least)} to ${minutesOf(most)} minutes for ${long.length ? 'most questions' : 'each question'}`
+        : '') +
+      (long.length
+        ? `${short.length ? ', ' : ''}${minutesOf(longest)} for the last ${long.length === 1 ? 'one' : long.length === 2 ? 'two' : long.length}`
+        : '')
+    const needsCheck = weekly && !checked
 
     return (
       <Frame kind={kind} onLeave={settling ? null : () => setLeaving(true)} rail={rail}>
@@ -627,9 +676,15 @@ export default function InterviewPage() {
             <>
               <ul className="plain-list">
                 <li>
-                  One question at a time. Five minutes each{code > 0 && ', ten for a coding question'}. When the time
-                  is up, your answer is sent and the next question starts. You cannot go back.
+                  One question at a time: {limits}. When the time is up, your answer is sent and the next question
+                  starts. You cannot go back.
                 </li>
+                {weekly && (
+                  <li>
+                    A question you skip scores 0. Answer fewer than three quarters of them and nothing is sent to any
+                    company.
+                  </li>
+                )}
                 <li>
                   Type your answers, or dictate them
                   {Recognition
@@ -639,15 +694,15 @@ export default function InterviewPage() {
                 {weekly ? (
                   <>
                     <li>
-                      The interview runs in full screen. Leaving it, switching tabs or switching windows is recorded.
-                      You may do so {session.leavesAllowed} times. The next time ends the interview.
+                      It runs in full screen, with pasting off. Leaving the window is recorded. You may do so{' '}
+                      {session.leavesAllowed} times. The next time ends the interview.
                     </li>
-                    <li>Pasting is turned off.</li>
                     <li>
-                      Closing or reloading the page ends the interview. An interview that ends early scores 0 and
-                      sends nothing.
+                      Your camera and microphone stay on. Time off camera, time turned away from the screen and a
+                      second person in view take points off, and companies see the record. No video or sound is saved
+                      or sent.
                     </li>
-                    <li>Companies you apply to see whether you stayed in the interview.</li>
+                    <li>Closing or reloading the page ends the interview with a score of 0, and nothing is sent.</li>
                   </>
                 ) : (
                   <li>Afterwards you get a score and feedback for every answer.</li>
@@ -655,12 +710,26 @@ export default function InterviewPage() {
               </ul>
 
               <div className="iv-options">
-                <label className="check">
-                  <input type="checkbox" checked={readAloud} onChange={(event) => setReadAloud(event.target.checked)} />
-                  Read each question aloud
-                </label>
-
-                {!weekly && (
+                {weekly ? (
+                  <div className="iv-offer">
+                    <div>
+                      <h2>Camera and microphone check</h2>
+                      <p>
+                        {checked
+                          ? 'Everything is in order. Both stay on until the interview ends, and you will see yourself beside each question, with tips.'
+                          : coachShown
+                            ? 'Work down the list beside this. The interview can begin once your face is in the picture, lit, sharp and alone, and the microphone has heard you.'
+                            : 'The weekly interview is taken on camera. Your browser will ask to use your camera and microphone: allow both. This is done now so that nothing interrupts you once you begin.'}
+                      </p>
+                    </div>
+                    {!coachShown && coach.status !== 'unsupported' && (
+                      <button type="button" className="btn primary" onClick={coach.turnOn}>
+                        <Icon name="video" size={18} />
+                        {coach.status === 'off' ? 'Check camera and microphone' : 'Check again'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
                   <div className="iv-offer">
                     <div>
                       <h2>Camera and voice coach</h2>
@@ -685,26 +754,47 @@ export default function InterviewPage() {
                 )}
                 {coach.status === 'blocked' && (
                   <Notice icon="alert">
-                    The camera is blocked for this site. Allow it from the address bar, then try again. You can also
-                    practise without the coach.
+                    {weekly
+                      ? 'The camera is blocked for this site. Allow the camera and the microphone from the address bar, then check again. The weekly interview cannot begin without them.'
+                      : 'The camera is blocked for this site. Allow it from the address bar, then try again. You can also practise without the coach.'}
+                  </Notice>
+                )}
+                {weekly && coachShown && (coach.mic === 'blocked' || coach.mic === 'none') && (
+                  <Notice icon="alert">
+                    {coach.mic === 'blocked'
+                      ? 'The microphone is blocked for this site. Allow it from the address bar, then press Check again.'
+                      : 'No microphone was found. Plug one in or switch it on, then press Check again.'}{' '}
+                    <button type="button" className="link" onClick={() => { coach.turnOff(); setTimeout(coach.turnOn, 50) }}>
+                      Check again
+                    </button>
                   </Notice>
                 )}
                 {coach.status === 'unsupported' && (
-                  <Notice icon="info">This page cannot use a camera here, so the coach is not available.</Notice>
+                  <Notice icon={weekly ? 'alert' : 'info'}>
+                    {weekly
+                      ? 'This page cannot use a camera here, and the weekly interview is taken on camera. Open Optima in a browser on a computer with a camera and a microphone.'
+                      : 'This page cannot use a camera here, so the coach is not available.'}
+                  </Notice>
                 )}
                 {coach.status === 'failed' && (
-                  <Notice icon="alert">The coach could not load. You can practise without it, or try again.</Notice>
+                  <Notice icon="alert">
+                    {weekly ? 'The camera check could not load. Check your connection and try again.' : 'The coach could not load. You can practise without it, or try again.'}
+                  </Notice>
                 )}
+                <label className="check">
+                  <input type="checkbox" checked={readAloud} onChange={(event) => setReadAloud(event.target.checked)} />
+                  Read each question aloud
+                </label>
               </div>
 
               <div className="iv-go">
-                <button type="button" className="btn primary lg" onClick={begin} disabled={starting || minutesToBegin === 0}>
+                <button type="button" className="btn primary lg" onClick={begin} disabled={starting || minutesToBegin === 0 || needsCheck}>
                   {weekly ? 'Go full screen and begin' : 'Begin'}
                 </button>
                 <p className="hint">
                   {minutesToBegin === 0
                     ? 'The time to begin has run out.'
-                    : `Begin within ${plural(minutesToBegin, 'minute')}. After that these questions close${weekly ? ' and this week’s interview is used' : ''}.`}
+                    : `${needsCheck ? 'Finish the camera and microphone check first. ' : ''}Begin within ${plural(minutesToBegin, 'minute')}. After that these questions close${weekly ? '. Your week is only used once you begin' : ''}.`}
                 </p>
               </div>
             </>
@@ -725,7 +815,7 @@ export default function InterviewPage() {
       <div
         className={locked ? 'no-copy' : undefined}
         onContextMenu={locked ? (event) => event.preventDefault() : undefined}
-        inert={leftNotice ? true : undefined}
+        inert={leftNotice || lock.excused ? true : undefined}
       >
         <QuestionFrame
           as="h1"
@@ -816,7 +906,6 @@ export default function InterviewPage() {
               </div>
               <span className="iv-words">
                 {words} {words === 1 ? 'word' : 'words'}
-                {question.question_type !== 'code' && <span className="muted">. 80 to 250 scores best</span>}
               </span>
             </div>
           </div>
@@ -846,6 +935,19 @@ export default function InterviewPage() {
                 ? 'That was the last time allowed. Leaving again ends the interview with a score of 0.'
                 : `You may leave ${leavesLeft === 1 ? 'once more' : `${leavesLeft} more times`}. After that, leaving ends the interview with a score of 0.`}
             </p>
+            <p className="hint">The clock is still running.</p>
+            <button type="button" className="btn primary lg" onClick={backToInterview} autoFocus>
+              Back to the interview
+            </button>
+          </div>
+        </div>
+      )}
+
+      {lock.excused && !leftNotice && (
+        <div className="iv-away" role="alertdialog" aria-modal="true" aria-labelledby="excused-title">
+          <div>
+            <h2 id="excused-title">Back to full screen</h2>
+            <p>Your browser closed full screen to ask you something. That was not you leaving, and nothing was recorded.</p>
             <p className="hint">The clock is still running.</p>
             <button type="button" className="btn primary lg" onClick={backToInterview} autoFocus>
               Back to the interview
@@ -885,9 +987,11 @@ function LeaveDialog({ weekly, begun, onStay, onLeave }) {
           </li>
         )}
         <li>
-          {weekly
-            ? 'This week’s interview stays used. The next one opens seven days after you started this one.'
-            : 'This still counts as one of today’s three practice interviews.'}
+          {!weekly
+            ? 'This still counts as one of today’s three practice interviews.'
+            : begun
+              ? 'This week’s interview stays used. The next one opens seven days after you started this one.'
+              : 'Your week has not been used. It is used when you begin.'}
         </li>
       </ul>
     </Modal>
