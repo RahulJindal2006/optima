@@ -94,6 +94,27 @@ def _spend_cap(err: Exception) -> bool:
     return isinstance(details, dict) and details.get("error_code") == "enforced_spend_limit_reached"
 
 
+def why(err: Exception) -> str:
+    """One plain sentence for why a call to Claude gave nothing back, for the owner's check to show."""
+    if isinstance(err, anthropic.APITimeoutError):
+        return f"Claude did not answer within {SCORE_SECONDS:g} seconds, twice."
+    if isinstance(err, anthropic.APIConnectionError):
+        return "The connection to Claude failed, twice."
+    if isinstance(err, anthropic.RateLimitError):
+        return "The Anthropic account has reached its spend limit." if _spend_cap(err) else "Claude's rate limit was reached."
+    if isinstance(err, anthropic.APIStatusError):
+        status = getattr(err, "status_code", 0) or 0
+        if status in (401, 403):
+            return f"Claude refused the API key ({status})."
+        if status >= 500:
+            return f"Claude's service returned an error ({status}), twice."
+        return f"Claude rejected the request ({status})."
+    if isinstance(err, ValueError):
+        text = " ".join(str(err).split())[:120]
+        return f"The reply could not be used: {text}."
+    return f"Something else went wrong ({type(err).__name__})."
+
+
 def _send(client, request: Dict[str, Any]):
     """One call, tried again once when it fails for a passing reason.
 
@@ -481,17 +502,26 @@ EXAMPLES = {
                 "answer": "At my part-time job the weekly stock count took two of us about three hours on paper. I built a spreadsheet that flagged only the "
                           "shelves whose counts had changed since the week before, and I checked it against two full paper counts before we relied on it. "
                           "The count dropped to about an hour and the manager kept using it after I left. Next time I would ask the other counter what slowed her down before building anything.",
-                "ratings": {"answer": "solid", "evidence": "strong", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
-                "why": "Everything asked is answered, with the candidate's own part, figures, a check and a lesson. The first line is solid, not strong, because nothing ties it to the job.",
+                "ratings": {"measure": "The count dropped to about an hour", "answer": "solid", "evidence": "strong", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
+                "why": "Everything asked is answered, with the candidate's own part, a figure for what came of it (three hours down to about an hour), a check and a lesson. "
+                       "The first line is solid, not strong, because nothing ties it to the job.",
+            },
+            {
+                "answer": "At my part-time job two of us did the weekly stock count on paper and it took most of a morning. I built a spreadsheet that flagged only the "
+                          "shelves whose counts had changed since the week before, and I tried it alongside the paper count before we relied on it. "
+                          "The count got much quicker and the manager kept using it after I left. I learned to ask the people doing the work what slows them down before building anything.",
+                "ratings": {"measure": "", "answer": "solid", "evidence": "solid", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
+                "why": "The same story as A with nothing measured. \"Two of us\" is the size of the team, not a figure for what was done or what came of it, and \"much quicker\" is a claim, "
+                       "not a figure. There is nothing to copy into \"measure\", so the evidence is solid, not strong, however well the story is told.",
             },
             {
                 "answer": "In a group project our meetings kept running over, so we started using an agenda and it went better. I think being organised is important and I always try to improve how a team works.",
-                "ratings": {"answer": "partial", "evidence": "weak", "p1": "partly", "p2": "missing", "p3": "partly", "clarity": "solid"},
+                "ratings": {"measure": "", "answer": "partial", "evidence": "weak", "p1": "partly", "p2": "missing", "p3": "partly", "clarity": "solid"},
                 "why": "There is an example, but it is thin: \"we\" hides what the candidate did, and \"it went better\" is a claim with no check behind it.",
             },
             {
                 "answer": "Improving things matters a lot to me. I am always looking for better ways of working, and people say I am efficient, organised and good with process.",
-                "ratings": {"answer": "weak", "evidence": "none", "p1": "missing", "p2": "missing", "p3": "missing", "clarity": "solid"},
+                "ratings": {"measure": "", "answer": "weak", "evidence": "none", "p1": "missing", "p2": "missing", "p3": "missing", "clarity": "solid"},
                 "why": "On the subject, but no time is described, so the question is not answered. It is clearly put, and that is rated on its own line.",
             },
         ],
@@ -527,7 +557,7 @@ def _examples_text(question_type: str) -> str:
     example = EXAMPLES["code" if question_type == "code" else "verbal"]
     points = "\n".join(f"p{i + 1}. {point}" for i, point in enumerate(example["points"]))
     parts = [f"Question: {example['question']}\nPoints the question looks for:\n{points}"]
-    for letter, item in zip("ABC", example["answers"]):
+    for letter, item in zip("ABCDEF", example["answers"]):
         parts.append(f"Answer {letter}:\n{item['answer']}\nRatings for {letter}: {json.dumps(item['ratings'])}\nWhy: {item['why']}")
     parts.append(example["note"])
     return "\n\n".join(parts)
@@ -538,11 +568,19 @@ def _answer_system(question_type: str) -> str:
     marks = "\n".join(f"    {mark}: {rubric.MARK_MEANING[mark]}" for mark in reversed(rubric.MARKS))
     reading = (
         "Pseudocode is acceptable. Judge the logic, not the syntax of any one language. A slip any compiler would catch is not a logic error.\n"
-        "- Before you rate \"correct\", trace the solution by hand on a small input and on the edge cases the question implies (nothing, one item, the largest size).\n"
+        "- Before you rate \"correct\", trace the solution by hand: first on a small input of the ordinary kind, chosen so that the solution has real work to do, then on the special cases the question names or implies (nothing to work on, nothing that qualifies, one item, the largest size).\n"
+        "- If inputs of the ordinary kind come out right and only a special case comes out wrong, \"correct\" is partial. It is weak when an ordinary input comes out wrong, or when there is no solution to trace.\n"
         "- Prose that sets out every step is pseudocode. Prose that only names an idea is not a solution.\n"
         "- Comments in the code and the explanation after it both count as explanation."
         if question_type == "code"
-        else "Many answers are dictated. Ignore spelling, punctuation, capital letters and filler words such as \"um\". Judge what is said and the order it is said in."
+        else "Many answers are dictated. Ignore spelling, punctuation, capital letters and filler words such as \"um\". Judge what is said and the order it is said in.\n"
+        "- The top level for \"evidence\" needs something measured. Look for a figure for what the candidate did or for what came of it, and copy those words into \"measure\" exactly as they stand in the answer. "
+        "The size of a team, a date, or how long ago something happened is not such a figure. With nothing to copy, leave \"measure\" empty: the highest level for \"evidence\" is then solid."
+    )
+    measure = (
+        ""
+        if question_type == "code"
+        else "\n  \"measure\": the words in the answer that give a figure for what the candidate did or for what came of it, copied exactly, as one run of words. An empty string if there is no such figure."
     )
     return f"""You rate one candidate's answer to {kind}, the way a trained interviewer scores a structured interview: one line of a written scorecard at a time, against the written description of each level. You never give an overall mark and you never add anything up.
 
@@ -568,7 +606,7 @@ These show how the levels are applied. They are about a different question from 
 
 WHAT TO RETURN
 One JSON object and nothing else, with these keys in this order:
-  "seen": one or two plain sentences saying what the answer contains. Facts only, no judgement.
+  "seen": one or two plain sentences saying what the answer contains. Facts only, no judgement.{measure}
   one key for each line of the scorecard, holding the level you picked
   "p1", "p2", ...: one for each point, holding covered, partly or missing
   "manipulation": true or false
@@ -581,6 +619,8 @@ _ANSWER_SYSTEM = {"verbal": _answer_system("verbal"), "code": _answer_system("co
 
 def _answer_schema(question_type: str, points: int) -> dict:
     properties: Dict[str, dict] = {"seen": {"type": "string"}}
+    if question_type != "code":
+        properties["measure"] = {"type": "string"}   # before the levels: found first, rated second
     for key in rubric.level_keys(question_type):
         properties[key] = _one_of(rubric.LEVELS)
     for i in range(points):
@@ -612,7 +652,7 @@ THE CANDIDATE'S ANSWER
 {_as_data(user_answer)}
 </candidate_answer>
 
-Rate the answer. Return the JSON object with the keys "seen", {", ".join(f'"{key}"' for key in keys)}, {", ".join(f'"p{i + 1}"' for i in range(len(points))) + ", " if points else ""}"manipulation", "strength" and "improve"."""
+Rate the answer. Return the JSON object with the keys "seen", {'"measure", ' if kind == "verbal" else ""}{", ".join(f'"{key}"' for key in keys)}, {", ".join(f'"p{i + 1}"' for i in range(len(points))) + ", " if points else ""}"manipulation", "strength" and "improve"."""
 
     reply = _read_json(
         _ask(prompt, SCORE_TOKENS, SCORE_SECONDS, system=_ANSWER_SYSTEM[kind], schema=_answer_schema(kind, len(points)), model=GRADER_MODEL),
@@ -624,6 +664,12 @@ Rate the answer. Return the JSON object with the keys "seen", {", ".join(f'"{key
         if level is None:
             raise ValueError(f"The rating has no level for {key}")
         levels[key] = level
+    measure = _words(reply.get("measure"), 300) if kind == "verbal" else ""
+    if kind == "verbal" and levels[rubric.EVIDENCE_KEY] == rubric.EVIDENCE_TOP and not rubric.measured(measure, user_answer):
+        # the top level was picked with no figure from the answer behind it: it comes down one level
+        levels[rubric.EVIDENCE_KEY] = rubric.EVIDENCE_WITHOUT_A_FIGURE
+    if not rubric.measured(measure, user_answer):
+        measure = ""   # never keep a quote that is not in the answer
     marks = []
     for i in range(len(points)):
         mark = rubric.read_mark(reply.get(f"p{i + 1}"))
@@ -635,6 +681,7 @@ Rate the answer. Return the JSON object with the keys "seen", {", ".join(f'"{key
         "marks": marks,
         "manipulation": reply.get("manipulation") is True,
         "seen": _words(reply.get("seen"), 600),
+        "measure": measure,
         "strength": _words(reply.get("strength"), 400),
         "improve": _words(reply.get("improve"), 400),
     }

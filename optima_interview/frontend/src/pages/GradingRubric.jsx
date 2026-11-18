@@ -41,7 +41,8 @@ const ADVICE = {
     title: 'What raises a score',
     items: [
       ['Answer the question that was asked.', 'An answer that is on the subject but does not answer cannot score above 35.'],
-      ['Give one specific example.', 'What the situation was, what you did, and what came of it. A number helps.'],
+      ['Give one specific example.', 'What the situation was, what you did, and what came of it.'],
+      ['Put a number on it.', 'How many, how much, how long, or by how much. The top level for evidence is only given when the answer has one.'],
       ['Answer every question.', 'A skipped one scores 0, and below three quarters answered nothing is sent.'],
       ['Fill in your profile.', 'Skills and a resume are a quarter of every match score, and zero when missing.'],
     ],
@@ -138,6 +139,13 @@ export default function GradingRubric() {
                 <div>
                   <dt>On the subject only</dt>
                   <dd>An answer that stays on the subject without answering the question cannot score above {rules.cap_when_weak}.</dd>
+                </div>
+                <div>
+                  <dt>The top level for evidence</dt>
+                  <dd>
+                    Needs a figure for what you did or what came of it. The grader has to copy it from your answer, and
+                    Optima checks that the words are there. Without one, evidence stops at Solid.
+                  </dd>
                 </div>
                 <div>
                   <dt>Length</dt>

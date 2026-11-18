@@ -97,6 +97,47 @@ class OneAnswer(unittest.TestCase):
         self.assertFalse(rubric.is_blank("return s[::-1]", "code"))
 
 
+class AFigureFromTheAnswer(unittest.TestCase):
+    """rubric.measured: is this quote a run of words from the answer, with a figure in it?"""
+
+    ANSWER = "We delivered on time, the centre put 140 bookings through it in the first two weeks, and we got 92 percent."
+
+    def test_a_run_of_words_from_the_answer_with_a_figure_passes(self):
+        for quote in ("the centre put 140 bookings through it", "we got 92 percent", "in the first two weeks"):
+            self.assertTrue(rubric.measured(quote, self.ANSWER), quote)
+
+    def test_it_is_compared_the_way_answers_are(self):
+        self.assertTrue(rubric.measured("THE CENTRE PUT 140 BOOKINGS THROUGH IT!", self.ANSWER))
+        self.assertTrue(rubric.measured("  we   got 92 percent. ", self.ANSWER))
+        self.assertTrue(rubric.measured("we got 92 percent", self.ANSWER.lower().replace(",", "").replace(".", "")))   # dictated
+
+    def test_a_quote_given_in_pieces_passes_if_one_piece_does(self):
+        self.assertTrue(rubric.measured("140 bookings ... 92 percent", self.ANSWER))
+        self.assertTrue(rubric.measured("we delivered on time … we got 92 percent", self.ANSWER))
+
+    def test_words_that_are_not_in_the_answer_do_not_pass(self):
+        self.assertFalse(rubric.measured("the centre put 150 bookings through it", self.ANSWER))
+        self.assertFalse(rubric.measured("we got 92 percent and a prize", self.ANSWER))
+
+    def test_words_with_no_figure_do_not_pass(self):
+        self.assertFalse(rubric.measured("We delivered on time", self.ANSWER))
+        self.assertFalse(rubric.measured("it got much quicker", "It got much quicker and everyone was happy."))
+
+    def test_nothing_does_not_pass(self):
+        for nothing in ("", "   ", None, 7, ["we got 92 percent"]):
+            self.assertFalse(rubric.measured(nothing, self.ANSWER))
+        self.assertFalse(rubric.measured("92 percent", ""))
+
+    def test_figures_said_in_words_count(self):
+        said = "it took three hours and now takes about an hour, which is half a day saved each month and twice as fast"
+        for quote in ("it took three hours", "now takes about an hour", "half a day saved", "twice as fast"):
+            self.assertTrue(rubric.measured(quote, said), quote)
+
+    def test_a_or_an_alone_is_not_a_figure(self):
+        self.assertFalse(rubric.measured("a better way", "I found a better way to do it."))
+        self.assertFalse(rubric.measured("an agenda", "We started using an agenda."))
+
+
 class SeveralRatings(unittest.TestCase):
     def rating(self, answer, evidence, clarity, marks, manipulation=False):
         return {"levels": verbal(answer, evidence, clarity), "marks": marks, "manipulation": manipulation, "seen": "", "strength": "", "improve": ""}

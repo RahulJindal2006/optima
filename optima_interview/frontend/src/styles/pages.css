@@ -1536,9 +1536,20 @@ a.sheet-main:hover .sheet-who strong {
   font-weight: 600;
 }
 
-.check-table + .hint {
+.check-table + .hint,
+.check-table + .notice + .hint {
   max-width: 44em;
   margin-top: 16px;
+}
+
+.check-table + .notice {
+  margin-top: 16px;
+}
+
+.check-failed {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0;
 }
 
 /* the scorecard behind each score, one answer to a line, opened on request */

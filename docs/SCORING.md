@@ -51,18 +51,23 @@ Three things made it soft and unrepeatable:
 Each line except "Covers what the role needs" gets one of five levels: none 0, weak 25, partial 50, solid 75,
 strong 100. Every level of every line has a written description (they are in `rubric.py` and shown in the app).
 The grader is told to pick the lower level when an answer sits between two, to rate only what is in the answer,
-and not to reward length. It is also shown three worked examples for each scorecard (a strong answer, a thin one
-and one that is on the subject without answering), each with the ratings it should get. Interviewers call these
-benchmarks. They are about a question the interview never asks, and a unit test checks that each scores where it
-should.
+and not to reward length. It is also shown worked examples for each scorecard, each with the ratings it should
+get: a strong answer, a thin one and one that is on the subject without answering, and for spoken answers the
+strong answer's own story told again with nothing measured. Interviewers call these benchmarks. They are about a
+question the interview never asks, and a unit test checks that each scores where it should.
 
 "Covers what the role needs" is worked out from the three to five points each question is written with:
 covered 1, partly 0.5, missing 0, averaged.
 
 A line's points are its level times its worth. The answer's score is the sum of the lines, to one decimal place.
 
-Four rules sit on top:
+Five rules sit on top:
 
+- **The top level for evidence has to be shown.** "Strong" evidence means something was measured: a figure
+  for what the candidate did or for what came of it. The grader has to copy the words that give the figure,
+  and the code checks that those words are in the answer and hold a figure (`rubric.measured`). A top rating
+  with nothing behind it comes down to solid. The size of a team or a date does not count, and that part is
+  the grader's call.
 - **Blank.** Fewer than 5 words (8 characters of code) scores 0. No call is made.
 - **Not an answer.** If the first line ("Answers the question" or "Correct") is rated none, the whole answer
   scores 0, and it does not count as answered.
@@ -71,7 +76,8 @@ Four rules sit on top:
   scores 0 and is flagged on the record.
 
 What this means in practice: every line at solid with every point covered is 83.8. Every line at strong is 100.
-A fair answer with a thin example and three points of five covered lands in the 50s or low 60s.
+A clear, complete answer with nothing measured in it cannot pass 92.5. A fair answer with a thin example and
+three points of five covered lands in the 50s or low 60s.
 
 ## Why the same answer gets the same grade
 
@@ -207,10 +213,26 @@ from the cost: the page did not show it then, and does now).
 Five runs of each answer is a small sample. It shows the grader is steady in the main and where it is not; it
 does not show how often a borderline answer moves.
 
-Not measured: 100 fresh gradings of one answer on the real model, how the grader treats answers between
-middling and strong (the "good" answers and the code that misses a case were added after this run), and
-whether its levels land where a recruiter's would. The first two are a run of `/scoring-check`. The third
-needs people reading graded answers against the level descriptions.
+A second run the same night, on six answers, four of them new (five runs each, 87 calls, $0.37), found two
+things wrong with rubric `2026.11-a`:
+
+| Answer | Scores | What it showed |
+|---|---|---|
+| Working with others: good | 100 on all five runs | The same as the strong answer. The only difference between the two is that the strong one has figures in it |
+| A missed campaign: good | 95.6 twice, 91.3 twice, 88.1 once | The same: no figures, scored like the strong answer (95.6) |
+| What to test: good | 76.3 on all five | Where a good answer was expected |
+| What to test: sound, A missed campaign: sound | 50.7 and 53.8 on all five | As in the first run |
+| Code that misses a case | 35 on four runs, one run failed | 35 is the cap for a solution rated as not working. This one is right whenever some character appears once |
+
+So the top of the scale was too easy to reach: a clear, complete answer got full marks whether or not it
+proved anything. And code that is right for the ordinary case was treated like code that is wrong. Rubric
+`2026.11-b` answers both. The top level for evidence now needs a figure, quoted from the answer and checked
+in code. The levels for "Correct" now turn on whether an ordinary input comes out right. One run failed because
+three calls to Claude did not come back, and the check could not say why: it now keeps the reason.
+
+Not measured: anything at all on rubric `2026.11-b` (run `/scoring-check` again), 100 fresh gradings of one
+answer on the real model, and whether the grader's levels land where a recruiter's would. That last one needs
+people reading graded answers against the level descriptions.
 
 ## Settings
 
@@ -295,6 +317,9 @@ Sources:
   graded answers, and it has not been done yet.
 - **Nearly the same is not the same.** Change one word and the answer is graded afresh. Three ratings keep
   that close to the first grade, not identical to it.
+- **A figure is not proof.** The check behind the top level for evidence confirms that the answer contains
+  the figure the grader quoted. It cannot confirm the figure is true, and an answer can earn the top level
+  with a made-up number. An interviewer has the same problem.
 - **Questions about the roles differ between candidates.** The six general questions are the same for
   everyone in a week. The other ten are written from the roles each candidate saved, so two candidates are
   compared on the same scorecard but not always on the same questions.

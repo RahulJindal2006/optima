@@ -19,7 +19,7 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-VERSION = "2026.11-a"
+VERSION = "2026.11-b"
 
 # ── Levels ───────────────────────────────────────────────────────────────────
 # Five levels for a criterion, three marks for one of the points a question looks for.
@@ -63,7 +63,7 @@ VERBAL = (
             "weak": "An example or detail is named, but it is vague or generic. What the candidate did is not clear.",
             "partial": "A real example or worked detail, but the candidate's own part in it, or what came of it, is unclear.",
             "solid": "A specific example or worked detail: the situation, what the candidate did, and what came of it.",
-            "strong": "As solid, with particulars that could be checked (numbers, tools, limits, trade-offs) and what the candidate learned or would change.",
+            "strong": "As solid, and what was done or what came of it is measured: at least one figure that could be checked (how many, how much, how long, by how much). It also says what the candidate learned or would change.",
         },
     },
     {
@@ -96,8 +96,8 @@ CODE = (
         "asks": "Does the solution do what the question asks?",
         "levels": {
             "none": "No solution, or one that does not address the problem.",
-            "weak": "An idea or an attempt, but not a working solution: the logic is missing or would not work.",
-            "partial": "Works for the main case. It has a bug, or fails a case the question implies.",
+            "weak": "An idea or an attempt, but not a working solution: the logic is missing, or an ordinary input gives the wrong result.",
+            "partial": "Right for ordinary inputs. Wrong for a special case (nothing to work on, nothing that qualifies, a limit), whether the question names that case or only implies it.",
             "solid": "Correct for what was asked.",
             "strong": "Correct, and the edge cases (empty input, limits) are handled or called out.",
         },
@@ -250,6 +250,43 @@ def read_mark(value: Any) -> Optional[str]:
     return word if word in MARKS else None
 
 
+# ── The top level for evidence has to be shown, not asserted ────────────────
+# "Strong" evidence means something was measured. The grader is asked to copy the words that give the
+# figure, and the copy is checked here: it has to be in the answer, and it has to hold a figure. A top
+# rating with nothing behind it comes down one level (claude_client.rate_answer). This keeps the top
+# of the scale for answers that prove something, and it turns a judgement that graders drift on into
+# a fact that can be looked up.
+_NUMBER_WORDS = (
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen "
+    "eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred hundreds thousand thousands million "
+    "millions billion half halved third thirds quarter quarters double doubled twice triple tripled dozen dozens percent"
+).split()
+_UNITS = "second minute hour day week month quarter year hundred thousand million dozen third half"
+_FIGURE = re.compile(
+    r"\d|\b(?:" + "|".join(_NUMBER_WORDS) + r")\b|\b(?:a|an)\s+(?:" + "|".join(_UNITS.split()) + r")\b",
+    re.I,
+)
+EVIDENCE_KEY = "evidence"
+EVIDENCE_TOP = "strong"
+EVIDENCE_WITHOUT_A_FIGURE = "solid"
+
+
+def measured(quote: Any, answer: Optional[str]) -> bool:
+    """True when `quote` is a run of words taken from `answer` that holds a figure.
+
+    Compared the way answers are compared: capitals, spacing and the punctuation around words do not
+    matter. A quote given in pieces ("... 140 bookings ... 92 percent") passes if any one piece does.
+    """
+    if not isinstance(quote, str) or not quote.strip():
+        return False
+    said = canon_answer(answer, "verbal")
+    for piece in re.split(r"\.{3,}|…", quote):
+        words = canon_answer(piece, "verbal")
+        if words and _FIGURE.search(words) and words in said:
+            return True
+    return False
+
+
 def _middle(values: Sequence[int]) -> int:
     """The middle of an odd number of ratings. Of an even number, the lower of the middle two:
     when the graders split evenly, the benefit of the doubt is not given."""
@@ -285,6 +322,7 @@ def combine(samples: Sequence[Dict[str, Any]], question_type: str, points: int) 
         "marks": marks,
         "manipulation": flagged * 2 > len(samples),
         "seen": closest.get("seen", ""),
+        "measure": closest.get("measure", ""),
         "strength": closest.get("strength", ""),
         "improve": closest.get("improve", ""),
         "samples": len(samples),

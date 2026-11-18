@@ -60,6 +60,8 @@ Claude never produces a number. For every answer it picks one of five written le
 | Covers what the role needs | 35% | 20% |
 | Clear and organised / Explained and readable | 15% | 20% |
 
+The top level for Evidence is only given when the answer contains a figure for what was done or what came of it. The grader has to quote the figure, and the code checks that the quote is in the answer.
+
 A skipped question scores 0 and counts in full. An interview with fewer than three quarters of its questions answered is not sent to any company.
 
 The interview is then matched against each open job in the candidate's field:

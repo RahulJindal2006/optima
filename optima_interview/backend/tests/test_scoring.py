@@ -28,7 +28,7 @@ class WorkedExamples(unittest.TestCase):
         example = claude_client.EXAMPLES[kind]
         out = []
         for item in example["answers"]:
-            levels = {key: value for key, value in item["ratings"].items() if not key.startswith("p")}
+            levels = {key: item["ratings"][key] for key in rubric.level_keys(kind)}
             marks = [item["ratings"][f"p{i + 1}"] for i in range(len(example["points"]))]
             out.append((levels, marks, rubric.scorecard(kind, levels, marks, example["points"])))
         return out
@@ -37,19 +37,39 @@ class WorkedExamples(unittest.TestCase):
         for kind in ("verbal", "code"):
             example = claude_client.EXAMPLES[kind]
             wanted = set(rubric.level_keys(kind)) | {f"p{i + 1}" for i in range(len(example["points"]))}
+            if kind == "verbal":
+                wanted.add("measure")   # the figure quoted from the answer, or nothing
             for item in example["answers"]:
                 self.assertEqual(set(item["ratings"]), wanted)
                 for key, value in item["ratings"].items():
-                    self.assertIn(value, rubric.MARKS if key.startswith("p") else rubric.LEVELS)
+                    if key != "measure":
+                        self.assertIn(value, rubric.MARKS if key.startswith("p") else rubric.LEVELS)
 
     def test_the_examples_score_where_a_strong_a_thin_and_an_empty_answer_should(self):
         for kind in ("verbal", "code"):
-            (_, _, strong), (_, _, thin), (levels, _, empty) = self.scored(kind)
+            scored = self.scored(kind)
+            (_, _, strong), (_, _, thin), (levels, _, empty) = scored[0], scored[-2], scored[-1]
             self.assertGreaterEqual(strong["score"], 85)
             self.assertTrue(30 <= thin["score"] <= 55, thin["score"])
             self.assertLessEqual(empty["score"], rubric.CAP_WHEN_WEAK)
             gate = next(c["key"] for c in rubric.card_for(kind) if c.get("gate"))
             self.assertEqual(levels[gate], "weak")   # on the subject, and not an answer
+
+    def test_the_same_story_with_and_without_a_figure_differs_by_one_level_of_evidence_and_nothing_else(self):
+        first, second = claude_client.EXAMPLES["verbal"]["answers"][:2]
+        (top, _, with_figure), (good, _, without) = self.scored("verbal")[:2]
+        self.assertEqual((top["evidence"], good["evidence"]), ("strong", "solid"))
+        self.assertEqual({k: v for k, v in first["ratings"].items() if k not in ("evidence", "measure")},
+                         {k: v for k, v in second["ratings"].items() if k not in ("evidence", "measure")})
+        self.assertEqual(round(with_figure["score"] - without["score"], 1), 7.5)
+        self.assertGreater(without["score"], 80)     # a good answer still scores well: it is the top that is kept back
+
+    def test_the_figure_an_example_quotes_is_in_its_answer_and_the_others_quote_nothing(self):
+        answers = claude_client.EXAMPLES["verbal"]["answers"]
+        self.assertTrue(rubric.measured(answers[0]["ratings"]["measure"], answers[0]["answer"]))
+        for item in answers[1:]:
+            self.assertEqual(item["ratings"]["measure"], "")
+            self.assertNotEqual(item["ratings"]["evidence"], "strong")
 
     def test_the_examples_are_in_the_instructions_and_are_not_a_question_the_interview_asks(self):
         from question_bank import GENERAL_QUESTIONS
@@ -63,6 +83,134 @@ class WorkedExamples(unittest.TestCase):
         # the API keeps instructions of 1,024 tokens or more; a token is at most about four characters of English
         for kind in ("verbal", "code"):
             self.assertGreater(len(claude_client._ANSWER_SYSTEM[kind]) / 4, 1200)
+
+
+class TopOfEvidence(unittest.TestCase):
+    """The top level for evidence has to be backed by a figure quoted from the answer."""
+
+    ANSWER = ("I rebuilt the weekly report so it ran from one query. It used to take about three hours by hand and now takes "
+              "ten minutes, and the team has used it every week since. Next time I would ask who reads it first.")
+
+    def rated(self, kind="verbal", **reply):
+        said = {"seen": "A report was rebuilt.", "answer": "solid", "evidence": "strong", "clarity": "solid", "p1": "covered",
+                "manipulation": False, "strength": "", "improve": ""}
+        if kind == "code":
+            said = {"seen": "A loop.", "correct": "solid", "approach": "strong", "clarity": "solid", "p1": "covered", "manipulation": False, "strength": "", "improve": ""}
+        said.update(reply)
+        real = claude_client._ask
+        claude_client._ask = lambda *args, **kwargs: __import__("json").dumps(said)
+        try:
+            return claude_client.rate_answer("Tell me about something you improved.", kind, ["What changed"], self.ANSWER)
+        finally:
+            claude_client._ask = real
+
+    def test_a_figure_copied_from_the_answer_keeps_the_top_level(self):
+        rating = self.rated(measure="now takes ten minutes")
+        self.assertEqual(rating["levels"]["evidence"], "strong")
+        self.assertEqual(rating["measure"], "now takes ten minutes")
+
+    def test_capitals_and_punctuation_in_the_copy_do_not_matter(self):
+        self.assertEqual(self.rated(measure="It used to take about THREE hours, by hand")["levels"]["evidence"], "strong")
+
+    def test_with_nothing_quoted_the_top_level_comes_down_one(self):
+        for nothing in ("", "   ", None):
+            rating = self.rated(measure=nothing)
+            self.assertEqual(rating["levels"]["evidence"], "solid", repr(nothing))
+            self.assertEqual(rating["measure"], "")
+
+    def test_a_reply_that_leaves_the_quote_out_altogether_is_treated_the_same(self):
+        said = {"seen": "x", "answer": "solid", "evidence": "strong", "clarity": "solid", "p1": "covered", "manipulation": False}
+        real = claude_client._ask
+        claude_client._ask = lambda *args, **kwargs: __import__("json").dumps(said)
+        try:
+            rating = claude_client.rate_answer("Q", "verbal", ["What changed"], self.ANSWER)
+        finally:
+            claude_client._ask = real
+        self.assertEqual(rating["levels"]["evidence"], "solid")
+
+    def test_a_quote_that_is_not_in_the_answer_does_not_count_and_is_not_kept(self):
+        rating = self.rated(measure="saved the company 40 percent")
+        self.assertEqual(rating["levels"]["evidence"], "solid")
+        self.assertEqual(rating["measure"], "")
+
+    def test_words_from_the_answer_with_no_figure_in_them_do_not_count(self):
+        self.assertEqual(self.rated(measure="the team has used it every week since")["levels"]["evidence"], "solid")
+
+    def test_only_the_top_level_is_touched(self):
+        for level in ("none", "weak", "partial", "solid"):
+            self.assertEqual(self.rated(evidence=level, measure="")["levels"]["evidence"], level)
+        kept = self.rated(evidence="solid", measure="now takes ten minutes")   # a figure does not raise a rating either
+        self.assertEqual((kept["levels"]["evidence"], kept["measure"]), ("solid", "now takes ten minutes"))
+
+    def test_the_other_lines_and_the_points_are_left_alone(self):
+        rating = self.rated(measure="")
+        self.assertEqual((rating["levels"]["answer"], rating["levels"]["clarity"], rating["marks"]), ("solid", "solid", ["covered"]))
+
+    def test_code_has_no_such_rule(self):
+        rating = self.rated(kind="code")
+        self.assertEqual(rating["levels"], {"correct": "solid", "approach": "strong", "clarity": "solid"})
+        self.assertEqual(rating["measure"], "")
+
+    def test_the_grader_is_asked_for_the_quote_before_the_levels_for_a_spoken_answer_only(self):
+        spoken = list(claude_client._answer_schema("verbal", 2)["properties"])
+        self.assertEqual(spoken[:3], ["seen", "measure", "answer"])
+        self.assertNotIn("measure", claude_client._answer_schema("code", 2)["properties"])
+        self.assertIn('"measure"', claude_client._ANSWER_SYSTEM["verbal"])
+        self.assertNotIn('"measure"', claude_client._ANSWER_SYSTEM["code"])
+
+    def test_three_ratings_of_which_two_have_no_figure_settle_on_solid(self):
+        ratings = [self.rated(measure="now takes ten minutes"), self.rated(measure=""), self.rated(measure="")]
+        final = rubric.combine(ratings, "verbal", 1)
+        self.assertEqual(final["levels"]["evidence"], "solid")
+
+
+class WhyARatingFailed(unittest.TestCase):
+    """A rating that fails says why, in a sentence, for the owner's check to show."""
+
+    def test_each_kind_of_failure_has_its_own_sentence(self):
+        request = httpx.Request("POST", "https://api.example/v1/messages")
+        self.assertIn("did not answer within", claude_client.why(anthropic.APITimeoutError(request=request)))
+        self.assertIn("connection", claude_client.why(anthropic.APIConnectionError(request=request)))
+        self.assertIn("(500)", claude_client.why(_status_error(anthropic.InternalServerError, 500)))
+        self.assertIn("API key", claude_client.why(_status_error(anthropic.AuthenticationError, 401)))
+        self.assertIn("rejected the request (400)", claude_client.why(_status_error(anthropic.BadRequestError, 400)))
+        self.assertIn("spend limit", claude_client.why(_status_error(anthropic.RateLimitError, 429, body={"error": {"details": {"error_code": "enforced_spend_limit_reached"}}})))
+        self.assertIn("could not be used", claude_client.why(ValueError("The model stopped early (max_tokens)")))
+
+    def test_rate_collects_a_sentence_for_each_rating_that_failed_and_none_for_one_that_worked(self):
+        calls = iter([ValueError("The model returned no text"), None, ValueError("The model returned no text")])
+        good = {"levels": {"answer": "solid", "evidence": "solid", "clarity": "solid"}, "marks": ["covered"], "manipulation": False}
+
+        def stand_in(*args):
+            error = next(calls)
+            if error:
+                raise error
+            return good
+
+        real = claude_client.rate_answer
+        claude_client.rate_answer = stand_in
+        try:
+            why = []
+            final = scoring.rate(("Q", "verbal", ["a point"], "an answer of some length here"), why=why)
+        finally:
+            claude_client.rate_answer = real
+        self.assertIsNone(final)                       # one good rating of three is too few
+        self.assertEqual(len(why), 2)
+        self.assertTrue(all("could not be used" in reason for reason in why))
+
+    def test_a_limit_is_not_a_reason(self):
+        def busy(*args):
+            raise claude_client.Busy(7)
+
+        real = claude_client.rate_answer
+        claude_client.rate_answer = busy
+        try:
+            why = []
+            final = scoring.rate(("Q", "verbal", ["a point"], "an answer of some length here"), why=why)
+        finally:
+            claude_client.rate_answer = real
+        self.assertTrue(scoring.is_busy(final))
+        self.assertEqual(why, [])
 
 
 def _status_error(cls, status, headers=None, body=None):

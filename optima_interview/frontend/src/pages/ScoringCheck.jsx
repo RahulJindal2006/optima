@@ -25,18 +25,18 @@ const PRICES = {
   'claude-opus-5-5': [4, 20],
 }
 
-// What one call used on average the first time this check ran on the live grader (18 November 2026,
-// claude-sonnet-4-6: 285 calls, 636,165 tokens in, 38,870 out, $1.00). Most of what is sent is the scorecard,
+// What one call used on average over the first two runs of this check on the live grader (18 November 2026,
+// claude-sonnet-4-6: 372 calls, 833,364 tokens in, 53,217 out, $1.37). Most of what is sent is the scorecard,
 // which is read back from the cache after the first call. Only used to say roughly what a run will cost
 // before it starts: the figure shown after a run comes from what that run really used.
-const A_CALL = { fresh: 294, cached: 1938, out: 136 }
+const A_CALL = { fresh: 324, cached: 1916, out: 143 }
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const tidy = (n) => (Number(n) % 1 ? Number(n).toFixed(1) : String(Number(n)))
 const count = (n) => Number(n).toLocaleString('en-CA')
 const dollars = (price, fresh, cached, out) => ((fresh + cached * 0.1) * price[0] + out * price[1]) / 1e6
-const blankRow = () => ({ scores: [], failed: 0, agree: [], kinds: {} })
-const copyOf = (row) => ({ ...row, scores: [...row.scores], agree: [...row.agree], kinds: Object.fromEntries(Object.entries(row.kinds).map(([sign, kind]) => [sign, { ...kind }])) })
+const blankRow = () => ({ scores: [], failed: 0, why: [], agree: [], kinds: {} })
+const copyOf = (row) => ({ ...row, scores: [...row.scores], why: [...row.why], agree: [...row.agree], kinds: Object.fromEntries(Object.entries(row.kinds).map(([sign, kind]) => [sign, { ...kind }])) })
 
 // One more run of an answer. Two runs are the same grading when every line of the scorecard got the same
 // level and every point the same mark: `kinds` holds each different grading once, with how often it came up.
@@ -131,13 +131,16 @@ function asText({ setup, runs, at, used, cost, results, order, steady, inBand, w
   ]
   const blocks = results.map(({ item, sum, row, failed }) => {
     const lines = [`${item.label} [${item.id}], should land ${item.band[0]} to ${item.band[1]}`]
-    if (!sum) return [...lines, failed ? `could not be graded (${failed} failed)` : 'not run'].join('\n')
+    const why = (row?.why || []).map((reason) => `failed: ${reason}`)
+    if (!sum) return [...lines, failed ? `could not be graded (${failed} failed)` : 'not run', ...why].join('\n')
     lines.push(`scores: ${sum.tally.map(([score, times]) => `${tidy(score)} (${times})`).join(', ')}${failed ? `, ${failed} failed` : ''}`)
+    lines.push(...why)
     const kinds = gradings(row, sum.most)
     for (const kind of kinds) lines.push(`${kind.times} of ${sum.done}, score ${tidy(kind.score)}: ${said(kind)}`)
     if (sum.agree != null) lines.push(`the separate ratings agreed with the one kept on ${Math.round(sum.agree * 100)}% of lines`)
     const words = kinds[0].card
     if (words?.seen) lines.push(`seen: ${words.seen}`)
+    if (words?.measure) lines.push(`measured: ${words.measure}`)
     if (words?.strength) lines.push(`worked: ${words.strength}`)
     if (words?.improve) lines.push(`would raise it: ${words.improve}`)
     return lines.join('\n')
@@ -248,6 +251,7 @@ export default function ScoringCheck() {
             if (!run) totals[item.id].failed += 1
             else record(totals[item.id], run)
           }
+          totals[item.id].why.push(...(reply.failures || [])) // a sentence for each run that could not be graded
           show()
           setUsed((was) => Object.fromEntries(Object.keys(was).map((k) => [k, was[k] + (reply.used?.[k] || 0)])))
           // a rate limit says nothing about the grader: wait as long as Claude asked, then carry on with the runs left
@@ -402,7 +406,7 @@ export default function ScoringCheck() {
                   <div className={steady === finished.length ? 'yes' : 'no'}>
                     <dt>Same score on every run</dt>
                     <dd>
-                      {steady} of {finished.length} answers
+                      {steady} of {finished.length} {finished.length === 1 ? 'answer' : 'answers'}
                     </dd>
                   </div>
                   <div>
@@ -412,7 +416,7 @@ export default function ScoringCheck() {
                   <div className={inBand === finished.length ? 'yes' : 'no'}>
                     <dt>Landed where an answer of that quality should</dt>
                     <dd>
-                      {inBand} of {finished.length} answers
+                      {inBand} of {finished.length} {finished.length === 1 ? 'answer' : 'answers'}
                     </dd>
                   </div>
                   {order.judged > 0 && (
@@ -478,6 +482,21 @@ export default function ScoringCheck() {
                   </tbody>
                 </table>
               </div>
+              {results.some((r) => r.row?.why.length > 0) && (
+                <Notice tone="stop" title="Some runs could not be graded.">
+                  <ul className="check-failed">
+                    {results
+                      .filter((r) => r.row?.why.length > 0)
+                      .map(({ item, row }) => (
+                        <li key={item.id}>
+                          {item.label}: {row.why.join(' ')}
+                        </li>
+                      ))}
+                  </ul>
+                  A run that fails is left out of the scores. In an interview, an answer that cannot be graded is left out of the
+                  score and can be graded again.
+                </Notice>
+              )}
               <p className="hint">
                 A stored grade never moves: the same answer always gets the grade it was first given. This check leaves the
                 store out, to show how far a fresh grading can move. If scores move more than you want, set GRADER_SAMPLES to 5

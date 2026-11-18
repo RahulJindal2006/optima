@@ -64,6 +64,12 @@ def wait_for(values: Sequence[Any]) -> float:
 
 
 def _safely(call, *args, **kwargs):
+    return _tried(call, args, kwargs, None)
+
+
+def _tried(call, args, kwargs, why: Optional[List[str]]):
+    """Make one call. A dict when it worked, busy when Claude said to slow down, None when it failed.
+    When `why` is given, a sentence saying what went wrong is added to it for each failure."""
     try:
         return call(*args, **kwargs)
     except claude_client.Busy as err:
@@ -71,6 +77,8 @@ def _safely(call, *args, **kwargs):
         return _Busy(err.seconds)
     except Exception as err:  # one failed rating must not sink the others
         log.warning("A rating failed: %s", err)
+        if why is not None:
+            why.append(claude_client.why(err))
         return None
 
 
@@ -196,6 +204,7 @@ def graded(record: dict, question_type: str, key_points: Sequence[str]) -> Dict[
         "cap": card["cap"],
         "answered": card["answered"],
         "seen": record.get("seen", ""),
+        "measure": record.get("measure", ""),   # the figure quoted from the answer, where the evidence was rated at the top
         "strength": record.get("strength", ""),
         "improve": record.get("improve", ""),
         "samples": record.get("samples", 1),
@@ -216,20 +225,21 @@ def graded(record: dict, question_type: str, key_points: Sequence[str]) -> Dict[
 
 
 def rate(item: Tuple[str, str, Sequence[str], str], samples: int = SAMPLES, lenient: bool = False,
-         pool: Optional[ThreadPoolExecutor] = None) -> Any:
+         pool: Optional[ThreadPoolExecutor] = None, why: Optional[List[str]] = None) -> Any:
     """Rate one answer afresh, `samples` times, and keep the middle rating on every line.
 
     Nothing is looked up and nothing is stored here. None when too few ratings came back to trust:
     at least two are needed (one, when only one was asked for or `lenient` is set). Busy (see
-    is_busy) when they were too few because Claude said to slow down.
+    is_busy) when they were too few because Claude said to slow down. Pass a list as `why` to be
+    told, in a sentence each, what went wrong with any rating that failed.
     """
     text, question_type, key_points, answer = item
     kind = "code" if question_type == "code" else "verbal"
     calls = [(text, kind, list(key_points), answer)] * samples
     if pool is None:
-        ratings = [_safely(claude_client.rate_answer, *call) for call in calls]
+        ratings = [_tried(claude_client.rate_answer, call, {}, why) for call in calls]
     else:
-        ratings = list(pool.map(lambda call: _safely(claude_client.rate_answer, *call), calls))
+        ratings = list(pool.map(lambda call: _tried(claude_client.rate_answer, call, {}, why), calls))
     return _settled(ratings, lambda good: settle(good, kind, len(key_points), samples, lenient))
 
 
