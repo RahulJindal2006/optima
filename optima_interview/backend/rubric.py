@@ -19,7 +19,7 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-VERSION = "2026.11-b"
+VERSION = "2026.11-c"
 
 # ── Levels ───────────────────────────────────────────────────────────────────
 # Five levels for a criterion, three marks for one of the points a question looks for.
@@ -49,8 +49,8 @@ VERBAL = (
             "none": "Blank, off the subject, or about something other than what was asked.",
             "weak": "On the subject, but it does not answer what was asked.",
             "partial": "Answers part of the question. Something that was asked for is missing.",
-            "solid": "Answers everything that was asked, directly.",
-            "strong": "Answers everything that was asked, directly, and shows why it matters for the job.",
+            "solid": "Answers everything that was asked, but thinly in places: an interviewer would have to ask a follow-up to get the whole answer.",
+            "strong": "Answers everything that was asked, directly and in full. Nothing is left for a follow-up question.",
         },
     },
     {
@@ -63,7 +63,7 @@ VERBAL = (
             "weak": "An example or detail is named, but it is vague or generic. What the candidate did is not clear.",
             "partial": "A real example or worked detail, but the candidate's own part in it, or what came of it, is unclear.",
             "solid": "A specific example or worked detail: the situation, what the candidate did, and what came of it.",
-            "strong": "As solid, and what was done or what came of it is measured: at least one figure that could be checked (how many, how much, how long, by how much). It also says what the candidate learned or would change.",
+            "strong": "As solid, and what was done or what came of it is measured: at least one figure that could be checked (how many, how much, how long, by how much).",
         },
     },
     {

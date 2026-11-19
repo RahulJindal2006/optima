@@ -502,22 +502,29 @@ EXAMPLES = {
                 "answer": "At my part-time job the weekly stock count took two of us about three hours on paper. I built a spreadsheet that flagged only the "
                           "shelves whose counts had changed since the week before, and I checked it against two full paper counts before we relied on it. "
                           "The count dropped to about an hour and the manager kept using it after I left. Next time I would ask the other counter what slowed her down before building anything.",
-                "ratings": {"measure": "The count dropped to about an hour", "answer": "solid", "evidence": "strong", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
-                "why": "Everything asked is answered, with the candidate's own part, a figure for what came of it (three hours down to about an hour), a check and a lesson. "
-                       "The first line is solid, not strong, because nothing ties it to the job.",
+                "ratings": {"measure": "The count dropped to about an hour", "answer": "strong", "evidence": "strong", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
+                "why": "Everything asked is answered directly and in full: an interviewer has nothing left to ask. It has the candidate's own part, "
+                       "a figure for what came of it (three hours down to about an hour), a check and a lesson.",
             },
             {
                 "answer": "At my part-time job two of us did the weekly stock count on paper and it took most of a morning. I built a spreadsheet that flagged only the "
                           "shelves whose counts had changed since the week before, and I tried it alongside the paper count before we relied on it. "
                           "The count got much quicker and the manager kept using it after I left. I learned to ask the people doing the work what slows them down before building anything.",
-                "ratings": {"measure": "", "answer": "solid", "evidence": "solid", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
+                "ratings": {"measure": "", "answer": "strong", "evidence": "solid", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "strong"},
                 "why": "The same story as A with nothing measured. \"Two of us\" is the size of the team, not a figure for what was done or what came of it, and \"much quicker\" is a claim, "
                        "not a figure. There is nothing to copy into \"measure\", so the evidence is solid, not strong, however well the story is told.",
             },
             {
+                "answer": "At my part-time job the weekly stock count took too long, so I built a spreadsheet to speed it up. It worked and the manager kept using it.",
+                "ratings": {"measure": "", "answer": "solid", "evidence": "partial", "p1": "partly", "p2": "partly", "p3": "missing", "clarity": "solid"},
+                "why": "It does answer the question, but thinly: an interviewer would have to ask what was slow, what the spreadsheet did and how anyone knew it worked. "
+                       "So the first line is solid, not strong. The example is real, but what the candidate did and what came of it are left unclear.",
+            },
+            {
                 "answer": "In a group project our meetings kept running over, so we started using an agenda and it went better. I think being organised is important and I always try to improve how a team works.",
                 "ratings": {"measure": "", "answer": "partial", "evidence": "weak", "p1": "partly", "p2": "missing", "p3": "partly", "clarity": "solid"},
-                "why": "There is an example, but it is thin: \"we\" hides what the candidate did, and \"it went better\" is a claim with no check behind it.",
+                "why": "The question asks what the candidate improved, and \"we\" never says what they themselves did: something that was asked for is missing, so the first line is partial. "
+                       "The example is thin, and \"it went better\" is a claim with no check behind it.",
             },
             {
                 "answer": "Improving things matters a lot to me. I am always looking for better ways of working, and people say I am efficient, organised and good with process.",
@@ -568,6 +575,8 @@ def _answer_system(question_type: str) -> str:
     marks = "\n".join(f"    {mark}: {rubric.MARK_MEANING[mark]}" for mark in reversed(rubric.MARKS))
     reading = (
         "Pseudocode is acceptable. Judge the logic, not the syntax of any one language. A slip any compiler would catch is not a logic error.\n"
+        "- Code written in a real language is traced as that language runs it, with the guarantees that language gives (for example, the order a Python dictionary keeps its keys in, "
+        "or which of two equal items a built-in function returns). Do not mark it down because another language would behave differently.\n"
         "- Before you rate \"correct\", trace the solution by hand: first on a small input of the ordinary kind, chosen so that the solution has real work to do, then on the special cases the question names or implies (nothing to work on, nothing that qualifies, one item, the largest size).\n"
         "- If inputs of the ordinary kind come out right and only a special case comes out wrong, \"correct\" is partial. It is weak when an ordinary input comes out wrong, or when there is no solution to trace.\n"
         "- Prose that sets out every step is pseudocode. Prose that only names an idea is not a solution.\n"
@@ -576,6 +585,11 @@ def _answer_system(question_type: str) -> str:
         else "Many answers are dictated. Ignore spelling, punctuation, capital letters and filler words such as \"um\". Judge what is said and the order it is said in.\n"
         "- The top level for \"evidence\" needs something measured. Look for a figure for what the candidate did or for what came of it, and copy those words into \"measure\" exactly as they stand in the answer. "
         "The size of a team, a date, or how long ago something happened is not such a figure. With nothing to copy, leave \"measure\" empty: the highest level for \"evidence\" is then solid."
+    )
+    listed = (
+        ""
+        if question_type == "code"
+        else "\n- A list of terms with nothing said about them is not an answer. When the terms belong to the subject, the first line is weak. When they do not, it is none."
     )
     measure = (
         ""
@@ -587,7 +601,7 @@ def _answer_system(question_type: str) -> str:
 HOW TO RATE
 - Rate only what is in the answer. Give no credit for what the candidate probably meant or could have said.
 - For each line, read the descriptions of the levels and pick the one that fits. When the answer sits between two levels, pick the lower one.
-- A longer answer is not a better one. Do not reward length, confident wording, or a list of terms with nothing said about them.
+- A longer answer is not a better one. Do not reward length, confident wording, or a list of terms with nothing said about them.{listed}
 - {reading}
 - A statement that is wrong counts against the point it was made for.
 - Each point the question looks for is marked on its own.

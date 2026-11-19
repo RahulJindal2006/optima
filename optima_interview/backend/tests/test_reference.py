@@ -74,6 +74,19 @@ class TheCodeAnswers(unittest.TestCase):
         for text, wanted in self.CASES.items():
             if wanted is not None:
                 self.assertEqual(solve(text), wanted, text)
+        for nothing_qualifies in ("aabb", ""):        # the question asks for None in both
+            with self.assertRaises(IndexError):
+                solve(nothing_qualifies)
+
+    def test_the_answer_that_leans_on_dictionary_order_is_right_whenever_some_character_appears_once(self):
+        # What the live grader doubted on 18 November 2026: in Python the first of several equal items is the one
+        # min() returns, and a dictionary keeps its keys in the order they were added.
+        solve = run_code("unique-order")
+        for text, wanted in self.CASES.items():
+            if wanted is not None:
+                self.assertEqual(solve(text), wanted, text)
+        for text, wanted in {"xaybx": "a", "zzabcabd": "c", "teeter": "r", "stress": "t", "aabbcdd": "c", "abcdefghijklmnopqrstuvwxyza": "b"}.items():
+            self.assertEqual(solve(text), wanted, text)
         self.assertEqual(solve("aabb"), "a")          # the question asks for None here
         with self.assertRaises(ValueError):           # and for None here
             solve("")

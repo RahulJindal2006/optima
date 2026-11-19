@@ -173,7 +173,8 @@ The reference answers (`backend/reference_answers.py`, all invented) are four qu
 each, from one a recruiter would call strong down to one that is off the subject: a general question every
 candidate can be asked, a software question, a marketing question and a coding question. The coding answers
 are run by the unit tests, so "works", "misses a case" and "has a bug" are facts, not opinions. There are also
-two lists of fashionable words, one answer that tells the grader to give it full marks, and one blank.
+two lists of fashionable words, one answer that tells the grader to give it full marks, one blank, and one piece
+of code that is right only because of what Python guarantees about dictionaries and `min()`.
 
 ### What has been measured, and what has not
 
@@ -230,7 +231,43 @@ proved anything. And code that is right for the ordinary case was treated like c
 in code. The levels for "Correct" now turn on whether an ordinary input comes out right. One run failed because
 three calls to Claude did not come back, and the check could not say why: it now keeps the reason.
 
-Not measured: anything at all on rubric `2026.11-b` (run `/scoring-check` again), 100 fresh gradings of one
+The first run on rubric `2026.11-b` (18 November 2026, all 24 answers, five runs each, 345 calls, $1.33):
+
+| | |
+|---|---|
+| Answers given the same score on all five runs | 17 of 24 |
+| Widest gap between two runs of one answer | 8.8 points |
+| Landed in the range predicted for their quality | 23 of 24 |
+| Questions whose answers came out in order | 4 of 4 |
+| Strong answers | 100, 100, 100, and 95.6 four times with 100 once |
+| Good answers, nothing measured | 92.5; 76.3 and 83.8; 83.8 and 78.8 |
+| Middling answers | 67.6 and 71.9; 58.2; 49.4 and 53.8; 80 for code |
+| Thin, off the subject, instructing the grader, blank | 16.3, 0, 0, 0 as before |
+
+The change did what it was for. The good answers came down from the top and the strong ones stayed there, and
+the grader's advice to the candidate became "add a figure for what came of it". No answer was given the top
+level for evidence on the strength of a figure about the setting.
+
+Seven answers moved between runs, each by one step on one line: three on the mark for a single point, two
+on the first line of the scorecard, one on evidence and one on approach. That run also showed three things in
+the wording, which rubric `2026.11-c` changes:
+
+- **The top of "Answers the question".** It read "shows why it matters for the job". The grader did not apply
+  that: it gave the top level and in the same reply advised the candidate to "connect it more directly to the
+  job". The top two levels now turn on something that can be seen: whether an interviewer would have to ask a
+  follow-up to get the whole answer.
+- **The top of "Evidence".** It also asked for what the candidate learned or would change. The grader gave the
+  top level without that. The clause is gone, so the description says what is enforced: something measured.
+  Where a question wants a lesson, it is one of the question's own points.
+- **A list of terms.** It was "on the subject" on four runs and "not an answer" on one. The instructions now
+  say which.
+
+And one thing about code. A solution using `min()` over a dictionary was rated as not working because that
+"does not guarantee" the order. In Python it does. The grader is now told to trace real code as its own
+language runs it, the reference answer for "misses a case" was replaced with one that does not hang on that
+point, and the `min()` one is kept as its own test.
+
+Not measured: anything at all on rubric `2026.11-c` (run `/scoring-check` again), 100 fresh gradings of one
 answer on the real model, and whether the grader's levels land where a recruiter's would. That last one needs
 people reading graded answers against the level descriptions.
 
@@ -317,6 +354,9 @@ Sources:
   graded answers, and it has not been done yet.
 - **Nearly the same is not the same.** Change one word and the answer is graded afresh. Three ratings keep
   that close to the first grade, not identical to it.
+- **The grader reads code. It does not run it.** It can be wrong about what a piece of code does, as it was
+  about `min()` over a dictionary. The reference answers that are code are run by the unit tests so that the
+  check has the facts to compare the grader with.
 - **A figure is not proof.** The check behind the top level for evidence confirms that the answer contains
   the figure the grader quoted. It cannot confirm the figure is true, and an answer can earn the top level
   with a made-up number. An interviewer has the same problem.

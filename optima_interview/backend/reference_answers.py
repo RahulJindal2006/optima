@@ -202,16 +202,14 @@ CASES = [
           "            return ch\n"
           "    return None\n\n"
           "It counts the characters and then returns the first one that appears once."),
-    # Right whenever some character appears once. When every character repeats it returns one of them where
-    # the question asks for None, and on an empty string it raises: min() of nothing.
+    # Right whenever some character appears once. When none does (every character repeats, or the string is
+    # empty) the list is empty and once[0] raises, where the question asks for None.
     _case("unique-misses", UNIQUE, "First character that does not repeat: misses a case", MISSES,
           "def first_unique(s):\n"
-          "    counts = {}\n"
-          "    for ch in s:\n"
-          "        counts[ch] = counts.get(ch, 0) + 1\n"
-          "    return min(counts, key=counts.get)\n\n"
-          "It counts how often each character appears and returns the one with the lowest count. The dictionary keeps "
-          "the order the characters were first seen in, so a tie goes to the earlier character."),
+          "    once = [ch for ch in s if s.count(ch) == 1]\n"
+          "    return once[0]\n\n"
+          "It keeps the characters that appear exactly once, in the order they come in the string, and returns the "
+          "first of them."),
     _case("unique-bug", UNIQUE, "First character that does not repeat: has a bug", THIN,
           "def first_unique(s):\n"
           "    seen = set()\n"
@@ -222,6 +220,21 @@ CASES = [
           "This goes through the string and returns the first character it has not seen before."),
     _case("unique-off", UNIQUE, "First character that does not repeat: no solution", OFF,
           "I would probably use a loop for this. Strings are one of my favourite things to work with."),
+
+    # ── Code that is right only because of what its language promises ──
+    # Right whenever some character appears once, by two things Python guarantees: a dictionary keeps its keys
+    # in the order they were added, and min() returns the first of several equal items. When every character
+    # repeats it returns one of them where the question asks for None, and on an empty string it raises.
+    # On 18 November 2026 the live grader rated this as not a working solution, saying min() over a dictionary
+    # "does not guarantee" the order. It is kept to see whether the grader reads real code as its language runs it.
+    _case("unique-order", UNIQUE, "First character that does not repeat: leans on dictionary order", MISSES,
+          "def first_unique(s):\n"
+          "    counts = {}\n"
+          "    for ch in s:\n"
+          "        counts[ch] = counts.get(ch, 0) + 1\n"
+          "    return min(counts, key=counts.get)\n\n"
+          "It counts how often each character appears and returns the one with the lowest count. The dictionary keeps "
+          "the order the characters were first seen in, so a tie goes to the earlier character."),
 
     # ── No answer at all ──
     _case("blank", TEAM, "Nothing written", ZERO, ""),
