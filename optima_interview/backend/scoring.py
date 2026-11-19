@@ -204,7 +204,9 @@ def graded(record: dict, question_type: str, key_points: Sequence[str]) -> Dict[
         "cap": card["cap"],
         "answered": card["answered"],
         "seen": record.get("seen", ""),
+        "limits": card.get("limits"),           # the least and the most an on-the-subject non-answer can score, when one of them applied
         "measure": record.get("measure", ""),   # the figure quoted from the answer, where the evidence was rated at the top
+        "trace": record.get("trace", ""),       # for code: what the grader worked out the solution returns
         "strength": record.get("strength", ""),
         "improve": record.get("improve", ""),
         "samples": record.get("samples", 1),

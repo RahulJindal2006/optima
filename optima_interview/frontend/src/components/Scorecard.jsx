@@ -61,9 +61,17 @@ export default function Scorecard({ rubric, showPoints = true }) {
         ))}
       </ul>
 
+      {/* a card graded before the limits were kept with it was capped at 35 */}
       {rubric.cap === 'weak' && (
         <p className="card-note">
-          It stayed on the subject without answering what was asked, so it could not score above 35 however well it was put.
+          It stayed on the subject without answering what was asked, so it could not score above {rubric.limits?.high ?? 35} however
+          well it was put.
+        </p>
+      )}
+      {rubric.cap === 'floor' && (
+        <p className="card-note">
+          The lines above add up to less than the score. An answer that is on the subject scores {rubric.limits?.low ?? 20} at the
+          least.
         </p>
       )}
       {rubric.cap === 'none' && <p className="card-note">It did not answer the question that was asked, so nothing else could count.</p>}

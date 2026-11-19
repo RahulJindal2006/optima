@@ -19,7 +19,7 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-VERSION = "2026.11-c"
+VERSION = "2026.11-d"
 
 # ── Levels ───────────────────────────────────────────────────────────────────
 # Five levels for a criterion, three marks for one of the points a question looks for.
@@ -46,7 +46,7 @@ VERBAL = (
         "gate": True,
         "asks": "Does the answer deal with what was actually asked?",
         "levels": {
-            "none": "Blank, off the subject, or about something other than what was asked.",
+            "none": "Blank, off the subject, about something other than what was asked, or only a list of terms with nothing said about them.",
             "weak": "On the subject, but it does not answer what was asked.",
             "partial": "Answers part of the question. Something that was asked for is missing.",
             "solid": "Answers everything that was asked, but thinly in places: an interviewer would have to ask a follow-up to get the whole answer.",
@@ -136,9 +136,26 @@ CODE = (
     },
 )
 
-# An answer that is not an answer earns nothing for style. One that is on the subject but does not
-# answer what was asked cannot score above CAP_WHEN_WEAK, however well it is put.
-CAP_WHEN_WEAK = 35.0
+# ── What a score means ───────────────────────────────────────────────────────
+# The four bands the scale is held to (set by the site's owner, 18 November 2026). They are what the
+# scoring check compares the grader with, and what the scoring guide shows.
+BANDS = (
+    {"name": "Really good", "low": 75, "high": 100,
+     "meaning": "Answers everything that was asked, in full, with something specific behind it. The very top needs a measured result."},
+    {"name": "Good", "low": 40, "high": 75,
+     "meaning": "Answers the question, with gaps: an example that is thin, points left out, or code that gets a special case wrong."},
+    {"name": "Bad", "low": 20, "high": 40,
+     "meaning": "On the subject, but it does not answer what was asked, or it answers a little with nothing behind it."},
+    {"name": "Really bad", "low": 0, "high": 20,
+     "meaning": "Not an answer: blank, off the subject, a list of terms, or text aimed at the grader."},
+)
+
+# An answer that is not an answer earns nothing for style, and scores 0. Anything that is on the subject
+# and says something scores at least FLOOR_ON_SUBJECT: it is a bad answer, not a missing one. And one that
+# is on the subject without answering what was asked cannot score above CAP_WHEN_WEAK, however well it is
+# put. Between them those two are the "Bad" band.
+FLOOR_ON_SUBJECT = 20.0
+CAP_WHEN_WEAK = 40.0
 
 # An answer shorter than this is not sent anywhere: it is a skipped question.
 MIN_WORDS = 5          # spoken or written answers
@@ -323,6 +340,7 @@ def combine(samples: Sequence[Dict[str, Any]], question_type: str, points: int) 
         "manipulation": flagged * 2 > len(samples),
         "seen": closest.get("seen", ""),
         "measure": closest.get("measure", ""),
+        "trace": closest.get("trace", ""),
         "strength": closest.get("strength", ""),
         "improve": closest.get("improve", ""),
         "samples": len(samples),
@@ -391,7 +409,14 @@ def scorecard(question_type: str, levels: Dict[str, str], marks: Sequence[str], 
             line["earned"] = 0.0
     elif gate == "weak" and score > CAP_WHEN_WEAK:
         score, cap = CAP_WHEN_WEAK, "weak"
-    return {"score": score, "lines": lines, "cap": cap, "answered": gate != "none"}
+    elif score < FLOOR_ON_SUBJECT:
+        # on the subject, whatever the first line was rated: the lines keep what they earned, and the
+        # answer is given the least that an answer on the subject gets
+        score, cap = FLOOR_ON_SUBJECT, "floor"
+    out = {"score": score, "lines": lines, "cap": cap, "answered": gate != "none"}
+    if cap in ("weak", "floor"):
+        out["limits"] = {"low": FLOOR_ON_SUBJECT, "high": CAP_WHEN_WEAK}   # kept with the card, so it can always say which limits applied
+    return out
 
 
 def feedback_text(card: Dict[str, Any], strength: str, improve: str) -> str:
@@ -401,6 +426,8 @@ def feedback_text(card: Dict[str, Any], strength: str, improve: str) -> str:
     said = [s.strip() for s in (strength, improve) if s and s.strip()]
     if card["cap"] == "weak":
         said.append(f"It stayed on the subject without answering what was asked, so it could not score above {int(CAP_WHEN_WEAK)}.")
+    if card["cap"] == "floor":
+        said.append(f"An answer that is on the subject scores {int(FLOOR_ON_SUBJECT)} at the least.")
     return " ".join(said)
 
 
@@ -622,6 +649,8 @@ def public() -> Dict[str, Any]:
         "verbal": lines(VERBAL),
         "code": lines(CODE),
         "cap_when_weak": CAP_WHEN_WEAK,
+        "floor_on_subject": FLOOR_ON_SUBJECT,
+        "bands": [dict(band) for band in BANDS],
         "min_words": MIN_WORDS,
         "seconds": dict(SECONDS),
         "complete_at": COMPLETE_AT,

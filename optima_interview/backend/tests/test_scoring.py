@@ -37,12 +37,12 @@ class WorkedExamples(unittest.TestCase):
         for kind in ("verbal", "code"):
             example = claude_client.EXAMPLES[kind]
             wanted = set(rubric.level_keys(kind)) | {f"p{i + 1}" for i in range(len(example["points"]))}
-            if kind == "verbal":
-                wanted.add("measure")   # the figure quoted from the answer, or nothing
+            wanted.add("measure" if kind == "verbal" else "trace")   # the figure quoted from the answer, or what the code was found to return
             for item in example["answers"]:
                 self.assertEqual(set(item["ratings"]), wanted)
+                self.assertEqual(list(item["ratings"])[0], "measure" if kind == "verbal" else "trace")   # found first, rated second
                 for key, value in item["ratings"].items():
-                    if key != "measure":
+                    if key not in ("measure", "trace"):
                         self.assertIn(value, rubric.MARKS if key.startswith("p") else rubric.LEVELS)
 
     def test_the_examples_score_where_a_strong_a_thin_and_an_empty_answer_should(self):
@@ -151,12 +151,25 @@ class TopOfEvidence(unittest.TestCase):
         self.assertEqual(rating["levels"], {"correct": "solid", "approach": "strong", "clarity": "solid"})
         self.assertEqual(rating["measure"], "")
 
+    def test_code_carries_what_the_grader_found_the_solution_returns(self):
+        rating = self.rated(kind="code", trace="  [3, 9, 2]: returns 9.   Right. []: returns None. Right. ")
+        self.assertEqual(rating["trace"], "[3, 9, 2]: returns 9. Right. []: returns None. Right.")
+        self.assertEqual(self.rated(kind="code")["trace"], "")              # a reply without one is still a rating
+        self.assertEqual(self.rated(measure="now takes ten minutes")["trace"], "")   # and a spoken answer has none
+        final = rubric.combine([self.rated(kind="code", trace="worked through")] * 3, "code", 1)
+        self.assertEqual(final["trace"], "worked through")
+
     def test_the_grader_is_asked_for_the_quote_before_the_levels_for_a_spoken_answer_only(self):
         spoken = list(claude_client._answer_schema("verbal", 2)["properties"])
         self.assertEqual(spoken[:3], ["seen", "measure", "answer"])
         self.assertNotIn("measure", claude_client._answer_schema("code", 2)["properties"])
         self.assertIn('"measure"', claude_client._ANSWER_SYSTEM["verbal"])
         self.assertNotIn('"measure"', claude_client._ANSWER_SYSTEM["code"])
+        # code has its own thing to set down before the levels: what the solution was found to return
+        self.assertEqual(list(claude_client._answer_schema("code", 2)["properties"])[:3], ["seen", "trace", "correct"])
+        self.assertNotIn("trace", spoken)
+        self.assertIn('"trace"', claude_client._ANSWER_SYSTEM["code"])
+        self.assertNotIn('"trace"', claude_client._ANSWER_SYSTEM["verbal"])
 
     def test_three_ratings_of_which_two_have_no_figure_settle_on_solid(self):
         ratings = [self.rated(measure="now takes ten minutes"), self.rated(measure=""), self.rated(measure="")]

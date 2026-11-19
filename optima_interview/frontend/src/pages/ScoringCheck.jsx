@@ -141,6 +141,7 @@ function asText({ setup, runs, at, used, cost, results, order, steady, inBand, w
     const words = kinds[0].card
     if (words?.seen) lines.push(`seen: ${words.seen}`)
     if (words?.measure) lines.push(`measured: ${words.measure}`)
+    if (words?.trace) lines.push(`trace: ${words.trace}`)
     if (words?.strength) lines.push(`worked: ${words.strength}`)
     if (words?.improve) lines.push(`would raise it: ${words.improve}`)
     return lines.join('\n')

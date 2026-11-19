@@ -16,6 +16,18 @@ This is the long version. The short version for candidates and companies is the 
 - In a weekly interview, time off camera, time turned away from the screen and a second person in the
   picture take points off, up to 25.
 
+## What a score means
+
+The scale is held to four bands, set by the site's owner. They are in `rubric.BANDS`, the scoring guide shows
+them, and the scoring check compares the live grader with them.
+
+| Score | Band | What is in it |
+|---|---|---|
+| 75 to 100 | Really good | Answers everything that was asked, in full, with something specific behind it. The very top needs a measured result |
+| 40 to 75 | Good | Answers the question, with gaps: an example that is thin, points left out, or code that gets a special case wrong |
+| 20 to 40 | Bad | On the subject, but it does not answer what was asked, or it answers a little with nothing behind it |
+| 0 to 20 | Really bad | Not an answer: blank, off the subject, a list of terms, or text aimed at the grader |
+
 ## What was wrong before
 
 The old grading was not hard-coded. It did call Claude, once per answer, and asked for a number from 0 to 100.
@@ -61,7 +73,7 @@ covered 1, partly 0.5, missing 0, averaged.
 
 A line's points are its level times its worth. The answer's score is the sum of the lines, to one decimal place.
 
-Five rules sit on top:
+Six rules sit on top:
 
 - **The top level for evidence has to be shown.** "Strong" evidence means something was measured: a figure
   for what the candidate did or for what came of it. The grader has to copy the words that give the figure,
@@ -70,14 +82,18 @@ Five rules sit on top:
   the grader's call.
 - **Blank.** Fewer than 5 words (8 characters of code) scores 0. No call is made.
 - **Not an answer.** If the first line ("Answers the question" or "Correct") is rated none, the whole answer
-  scores 0, and it does not count as answered.
-- **On the subject, not an answer.** If the first line is rated weak, the answer cannot score above 35.
+  scores 0, and it does not count as answered. A list of terms with nothing said about them is rated none.
+- **On the subject.** Any answer whose first line is rated above none scores 20 at the least: it is a bad
+  answer, not a missing one. The lines keep what they earned, and the card says the floor applied.
+- **On the subject, not an answer.** If the first line is rated weak, the answer cannot score above 40. With
+  the floor, that puts every such answer in the "Bad" band.
 - **Text aimed at the grader.** An answer that asks for a score or tells the grader to ignore its instructions
   scores 0 and is flagged on the record.
 
 What this means in practice: every line at solid with every point covered is 83.8. Every line at strong is 100.
 A clear, complete answer with nothing measured in it cannot pass 92.5. A fair answer with a thin example and
-three points of five covered lands in the 50s or low 60s.
+three points of five covered lands in the 50s or low 60s. A vague answer with no example scores 20. Nothing
+scores between 0 and 20: an answer is either not one, or it is on the subject.
 
 ## Why the same answer gets the same grade
 
@@ -170,7 +186,8 @@ that cannot be rated is left out and counted, not guessed.
   model is.
 
 The reference answers (`backend/reference_answers.py`, all invented) are four questions with five answers
-each, from one a recruiter would call strong down to one that is off the subject: a general question every
+each, labelled with the band each belongs in: two that are really good (one with figures and one without), one
+good, one bad, and one really bad because it is off the subject. The questions are a general one every
 candidate can be asked, a software question, a marketing question and a coding question. The coding answers
 are run by the unit tests, so "works", "misses a case" and "has a bug" are facts, not opinions. There are also
 two lists of fashionable words, one answer that tells the grader to give it full marks, one blank, and one piece
@@ -267,7 +284,35 @@ And one thing about code. A solution using `min()` over a dictionary was rated a
 language runs it, the reference answer for "misses a case" was replaced with one that does not hang on that
 point, and the `min()` one is kept as its own test.
 
-Not measured: anything at all on rubric `2026.11-c` (run `/scoring-check` again), 100 fresh gradings of one
+The first run on rubric `2026.11-c` (18 November 2026, all 25 answers, five runs each, 360 calls, $1.42):
+
+| | |
+|---|---|
+| Answers given the same score on all five runs | 19 of 25 |
+| Widest gap between two runs of one answer | 11.8 points |
+| Questions whose answers came out in order | 4 of 4 |
+| Really good, with figures | 100, 100, 100, and 95.6 three times with 100 twice |
+| Really good, no figures | 92.5; 88.1; and one that moved between 76.3 and 88.1 |
+| Good | 63.2 and 67.6; 63.2; 58.8; code that misses a case 47.5 and 50 |
+| Bad | 16.3 for each of the three vague answers; 27.5 for code with a bug |
+| Really bad | 0 for off the subject, instructing the grader, blank and no solution; 8.8 and 17.6 for lists of words |
+
+The wording changes held: the two "good" answers and one "really good" answer that had moved were steady, and
+code that is right for ordinary inputs and wrong for a special case was rated as partly correct (47.5 to 50,
+from 30 to 35).
+
+Set against the four bands, one kind of answer missed: a vague answer with no example scored 16.3, under the
+20 that a bad answer starts at. Rubric `2026.11-d` puts that right with the floor described above, raises
+the cap for an on-the-subject non-answer from 35 to 40, and rates a list of terms as not an answer, so that it
+always sits below a vague one.
+
+One answer was still graded wrongly: the code that leans on Python's dictionary order and `min()` scored 30 to
+35, rated as not working, though it is right for every input in which some character appears once. Telling
+the grader to read real code as its language runs it did not change that. In `2026.11-d` the grader has to
+write out what the solution returns for a real input before it picks any level, the same way it has to quote a
+figure before it can give the top level for evidence.
+
+Not measured: anything at all on rubric `2026.11-d` (run `/scoring-check` again), 100 fresh gradings of one
 answer on the real model, and whether the grader's levels land where a recruiter's would. That last one needs
 people reading graded answers against the level descriptions.
 

@@ -541,17 +541,20 @@ EXAMPLES = {
             {
                 "answer": "def largest(items):\n    if not items:\n        return None\n    best = items[0]\n    for item in items:\n        if item > best:\n            best = item\n    return best\n\n"
                           "It keeps the best value seen so far and looks at each item once, so the time is O(n) and it needs no extra space. An empty list returns None.",
-                "ratings": {"correct": "strong", "approach": "strong", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "solid"},
+                "ratings": {"trace": "[3, 9, 2]: best starts at 3, becomes 9 at the second item, stays 9, and 9 is returned. Right. []: the first check returns None. Right.",
+                            "correct": "strong", "approach": "strong", "p1": "covered", "p2": "covered", "p3": "covered", "clarity": "solid"},
                 "why": "Correct, the empty list is handled and the cost is stated correctly. It says how it works but not why it was done this way, so the last line is solid.",
             },
             {
                 "answer": "def largest(items):\n    items.sort()\n    return items[-1]",
-                "ratings": {"correct": "partial", "approach": "partial", "p1": "missing", "p2": "missing", "p3": "missing", "clarity": "partial"},
+                "ratings": {"trace": "[3, 9, 2]: sorted in place to [2, 3, 9], and the last item, 9, is returned. Right. []: items[-1] on an empty list raises an error. Wrong.",
+                            "correct": "partial", "approach": "partial", "p1": "missing", "p2": "missing", "p3": "missing", "clarity": "partial"},
                 "why": "Right for a list with something in it, but an empty list raises an error. Sorting does more work than the problem needs and changes the caller's list. Readable, with no explanation.",
             },
             {
                 "answer": "I would loop through the list and find the biggest one, it is pretty easy.",
-                "ratings": {"correct": "weak", "approach": "solid", "p1": "missing", "p2": "partly", "p3": "missing", "clarity": "weak"},
+                "ratings": {"trace": "There is no solution to trace: the answer names an idea and writes nothing that could be run or followed step by step.",
+                            "correct": "weak", "approach": "solid", "p1": "missing", "p2": "partly", "p3": "missing", "clarity": "weak"},
                 "why": "A sound idea and nothing more: no solution is written, so there is nothing to run or to read. Going through the list once is implied, not shown.",
             },
         ],
@@ -578,6 +581,7 @@ def _answer_system(question_type: str) -> str:
         "- Code written in a real language is traced as that language runs it, with the guarantees that language gives (for example, the order a Python dictionary keeps its keys in, "
         "or which of two equal items a built-in function returns). Do not mark it down because another language would behave differently.\n"
         "- Before you rate \"correct\", trace the solution by hand: first on a small input of the ordinary kind, chosen so that the solution has real work to do, then on the special cases the question names or implies (nothing to work on, nothing that qualifies, one item, the largest size).\n"
+        "- Write that trace into \"trace\" before you pick any level, and rate \"correct\" from what the trace found, not from how the solution looks.\n"
         "- If inputs of the ordinary kind come out right and only a special case comes out wrong, \"correct\" is partial. It is weak when an ordinary input comes out wrong, or when there is no solution to trace.\n"
         "- Prose that sets out every step is pseudocode. Prose that only names an idea is not a solution.\n"
         "- Comments in the code and the explanation after it both count as explanation."
@@ -589,10 +593,11 @@ def _answer_system(question_type: str) -> str:
     listed = (
         ""
         if question_type == "code"
-        else "\n- A list of terms with nothing said about them is not an answer. When the terms belong to the subject, the first line is weak. When they do not, it is none."
+        else "\n- A list of terms with nothing said about them is not an answer, whatever the terms are: the first line is none."
     )
     measure = (
-        ""
+        "\n  \"trace\": what the solution returns, worked through step by step, for one small input of the ordinary kind, and what the right result is. "
+        "Then one short line for each special case the question names or implies: what the solution does there, and what it should do. If there is no solution to trace, say so."
         if question_type == "code"
         else "\n  \"measure\": the words in the answer that give a figure for what the candidate did or for what came of it, copied exactly, as one run of words. An empty string if there is no such figure."
     )
@@ -633,8 +638,8 @@ _ANSWER_SYSTEM = {"verbal": _answer_system("verbal"), "code": _answer_system("co
 
 def _answer_schema(question_type: str, points: int) -> dict:
     properties: Dict[str, dict] = {"seen": {"type": "string"}}
-    if question_type != "code":
-        properties["measure"] = {"type": "string"}   # before the levels: found first, rated second
+    # before the levels: found first, rated second
+    properties["trace" if question_type == "code" else "measure"] = {"type": "string"}
     for key in rubric.level_keys(question_type):
         properties[key] = _one_of(rubric.LEVELS)
     for i in range(points):
@@ -666,7 +671,7 @@ THE CANDIDATE'S ANSWER
 {_as_data(user_answer)}
 </candidate_answer>
 
-Rate the answer. Return the JSON object with the keys "seen", {'"measure", ' if kind == "verbal" else ""}{", ".join(f'"{key}"' for key in keys)}, {", ".join(f'"p{i + 1}"' for i in range(len(points))) + ", " if points else ""}"manipulation", "strength" and "improve"."""
+Rate the answer. Return the JSON object with the keys "seen", {'"measure", ' if kind == "verbal" else '"trace", '}{", ".join(f'"{key}"' for key in keys)}, {", ".join(f'"p{i + 1}"' for i in range(len(points))) + ", " if points else ""}"manipulation", "strength" and "improve"."""
 
     reply = _read_json(
         _ask(prompt, SCORE_TOKENS, SCORE_SECONDS, system=_ANSWER_SYSTEM[kind], schema=_answer_schema(kind, len(points)), model=GRADER_MODEL),
@@ -696,6 +701,7 @@ Rate the answer. Return the JSON object with the keys "seen", {'"measure", ' if 
         "manipulation": reply.get("manipulation") is True,
         "seen": _words(reply.get("seen"), 600),
         "measure": measure,
+        "trace": _words(reply.get("trace"), 900) if kind == "code" else "",
         "strength": _words(reply.get("strength"), 400),
         "improve": _words(reply.get("improve"), 400),
     }

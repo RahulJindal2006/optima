@@ -70,9 +70,53 @@ class OneAnswer(unittest.TestCase):
         self.assertEqual(got["score"], rubric.CAP_WHEN_WEAK)
         self.assertEqual(got["cap"], "weak")
         self.assertTrue(got["answered"])
-        low = card(verbal("weak", "none", "weak"), ["missing"] * 4)
-        self.assertEqual(low["score"], round(25 * 0.20 + 25 * 0.15, 1))   # below the cap: left alone
-        self.assertIsNone(low["cap"])
+        self.assertEqual(got["limits"], {"low": rubric.FLOOR_ON_SUBJECT, "high": rubric.CAP_WHEN_WEAK})
+        between = card(verbal("weak", "weak", "solid"), ["partly", "missing", "missing", "missing"])
+        self.assertEqual(between["score"], 28.2)                          # inside the band: left alone, and the lines add up to it
+        self.assertEqual(round(sum(line["earned"] for line in between["lines"]), 1), 28.2)
+        self.assertIsNone(between["cap"])
+        self.assertNotIn("limits", between)
+
+    def test_on_the_subject_scores_twenty_at_the_least(self):
+        thin = card(verbal("weak", "none", "solid"), ["missing"] * 4)     # a vague answer with no example, clearly put
+        self.assertEqual(thin["score"], rubric.FLOOR_ON_SUBJECT)
+        self.assertEqual(thin["cap"], "floor")
+        self.assertTrue(thin["answered"])
+        self.assertEqual(round(sum(line["earned"] for line in thin["lines"]), 1), 16.3)   # the lines keep what they earned
+        self.assertEqual(thin["limits"], {"low": 20.0, "high": 40.0})
+        # it is not only the first line at "weak": a better first line can never score below a worse one
+        self.assertEqual(card(verbal("partial", "none", "weak"), ["missing"] * 4)["score"], rubric.FLOOR_ON_SUBJECT)
+        self.assertEqual(card({"correct": "weak", "approach": "none", "clarity": "none"}, ["missing"] * 3, kind="code")["score"], rubric.FLOOR_ON_SUBJECT)
+
+    def test_no_score_falls_between_nothing_and_the_floor_and_a_better_first_line_never_scores_lower(self):
+        import itertools
+        for kind in ("verbal", "code"):
+            keys = rubric.level_keys(kind)
+            for rest in itertools.product(rubric.LEVELS, repeat=2):
+                for covered in range(5):
+                    marks = ["covered"] * covered + ["missing"] * (4 - covered)
+                    scores = [rubric.scorecard(kind, dict(zip(keys, (first,) + rest)), marks, ["a", "b", "c", "d"])["score"] for first in rubric.LEVELS]
+                    self.assertEqual(scores, sorted(scores), (kind, rest, covered))
+                    self.assertEqual(scores[0], 0.0)
+                    self.assertTrue(all(score >= rubric.FLOOR_ON_SUBJECT for score in scores[1:]), (kind, rest, covered, scores))
+                    self.assertLessEqual(scores[1], rubric.CAP_WHEN_WEAK)
+
+    def test_the_four_bands_cover_the_scale_and_the_two_limits_are_the_bad_band(self):
+        bands = sorted(rubric.BANDS, key=lambda band: band["low"])
+        self.assertEqual([band["name"] for band in bands], ["Really bad", "Bad", "Good", "Really good"])
+        self.assertEqual((bands[0]["low"], bands[-1]["high"]), (0, 100))
+        for lower, upper in zip(bands, bands[1:]):
+            self.assertEqual(lower["high"], upper["low"])
+        bad = next(band for band in rubric.BANDS if band["name"] == "Bad")
+        self.assertEqual((bad["low"], bad["high"]), (rubric.FLOOR_ON_SUBJECT, rubric.CAP_WHEN_WEAK))
+        shown = rubric.public()
+        self.assertEqual((shown["floor_on_subject"], shown["cap_when_weak"], len(shown["bands"])), (20.0, 40.0, 4))
+
+    def test_the_plain_feedback_says_which_limit_applied(self):
+        thin = card(verbal("weak", "none", "solid"), ["missing"] * 4)
+        self.assertIn("scores 20 at the least", rubric.feedback_text(thin, "", "Give one example."))
+        rich = card(verbal("weak", "strong", "strong"), ["covered"] * 4)
+        self.assertIn("could not score above 40", rubric.feedback_text(rich, "", ""))
 
     def test_code_uses_its_own_card(self):
         got = card({"correct": "solid", "approach": "partial", "clarity": "solid"}, ["covered", "covered", "missing"], kind="code")

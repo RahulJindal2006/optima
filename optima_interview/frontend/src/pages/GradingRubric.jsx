@@ -40,7 +40,7 @@ const ADVICE = {
   candidate: {
     title: 'What raises a score',
     items: [
-      ['Answer the question that was asked.', 'An answer that is on the subject but does not answer cannot score above 35.'],
+      ['Answer the question that was asked.', 'An answer that is on the subject but does not answer is a bad answer, however well it is put.'],
       ['Give one specific example.', 'What the situation was, what you did, and what came of it.'],
       ['Put a number on it.', 'How many, how much, how long, or by how much. The top level for evidence is only given when the answer has one.'],
       ['Answer every question.', 'A skipped one scores 0, and below three quarters answered nothing is sent.'],
@@ -110,6 +110,29 @@ export default function GradingRubric() {
         Two scores, both out of 100. One for each answer, and one for how well a whole interview fits a role.
       </PageHead>
 
+      {rules?.bands && (
+        <section className="guide">
+          <div className="guide-head">
+            <h2>What a score means</h2>
+            <p>The scale is held to four bands, and a built-in check grades answers of each kind to see that they land in them.</p>
+          </div>
+          <div className="guide-body">
+            <dl className="bands">
+              {rules.bands.map((band) => (
+                <div key={band.name}>
+                  <dt>
+                    {band.low} to {band.high}
+                  </dt>
+                  <dd>
+                    <strong>{band.name}.</strong> {band.meaning}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+      )}
+
       <section className="guide">
         <div className="guide-head">
           <h2>A scorecard for every answer</h2>
@@ -132,13 +155,16 @@ export default function GradingRubric() {
                 <div>
                   <dt>Not an answer</dt>
                   <dd>
-                    Blank, under {rules.min_words} words, or about something other than what was asked: 0, however well it
-                    is put.
+                    Blank, under {rules.min_words} words, a list of terms, or about something other than what was asked: 0,
+                    however well it is put.
                   </dd>
                 </div>
                 <div>
                   <dt>On the subject only</dt>
-                  <dd>An answer that stays on the subject without answering the question cannot score above {rules.cap_when_weak}.</dd>
+                  <dd>
+                    An answer that stays on the subject without answering the question scores between{' '}
+                    {rules.floor_on_subject ?? 20} and {rules.cap_when_weak}, however badly or well it is put.
+                  </dd>
                 </div>
                 <div>
                   <dt>The top level for evidence</dt>

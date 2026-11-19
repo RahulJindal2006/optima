@@ -31,6 +31,30 @@ class TheSet(unittest.TestCase):
             low, high = case["band"]
             self.assertTrue(0 <= low <= high <= 100, case["id"])
 
+    def test_every_answer_is_in_one_of_the_four_bands_and_every_band_has_answers(self):
+        bands = {(band["low"], band["high"]): band["name"] for band in rubric.BANDS}
+        seen = set()
+        for case in reference.CASES:
+            band = tuple(case["band"])
+            if band == (0, 0):
+                self.assertIn(case["id"], ("blank", "team-instructs"))    # the two that must be exactly nothing
+                continue
+            self.assertIn(band, bands, case["id"])
+            seen.add(bands[band])
+        self.assertEqual(seen, {"Really bad", "Bad", "Good", "Really good"})
+
+    def test_the_labels_say_which_band_in_the_owners_words(self):
+        for case in reference.CASES:
+            band, said = tuple(case["band"]), case["label"].split(": ", 1)[-1]
+            if band == (75, 100):
+                self.assertTrue(said.startswith("really good"), case["label"])
+            elif band == (40, 75):
+                self.assertTrue(said.startswith("good"), case["label"])
+            elif band == (20, 40):
+                self.assertTrue(said.startswith("bad"), case["label"])
+            elif band == (0, 20):
+                self.assertTrue(said.startswith("really bad"), case["label"])
+
     def test_only_the_blank_answer_is_too_short_to_be_sent(self):
         unsent = [case["id"] for case in reference.CASES if rubric.is_blank(case["answer"], case["question_type"])]
         self.assertEqual(unsent, ["blank"])
