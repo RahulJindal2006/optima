@@ -71,10 +71,11 @@ def check_run(payload: CheckRun, x_admin_key: Optional[str] = Header(default=Non
     if rubric.is_blank(case["answer"], case["question_type"]):
         # too short to be an answer: it scores 0 without a call, every time
         blank = {"score": 0.0, "levels": {}, "marks": [], "manipulation": False, "agreement": 1.0, "ratings": 0, "card": None}
-        return {"case": case["id"], "runs": [blank] * payload.runs, "used": nothing, "wait_seconds": 0, "failures": []}
+        return {"case": case["id"], "runs": [blank] * payload.runs, "used": nothing, "wait_seconds": 0, "failures": [], "refused": ""}
     before = claude_client.usage()
     wait = 0.0
     failures: List[str] = []
+    refused = ""
     with ThreadPoolExecutor(max_workers=scoring.PARALLEL) as pool:
         for _ in range(payload.runs):
             went_wrong: List[str] = []
@@ -89,6 +90,11 @@ def check_run(payload: CheckRun, x_admin_key: Optional[str] = Header(default=Non
                 # why this run could not be graded, each different reason once with how many ratings it took
                 seen = {reason: went_wrong.count(reason) for reason in went_wrong}
                 failures.append(" ".join(f"{reason} ({n} of {scoring.SAMPLES} ratings)" if n > 1 else reason for reason, n in seen.items()) or "Too few ratings came back.")
+                if went_wrong and all(reason.startswith(claude_client.REFUSALS) for reason in went_wrong):
+                    # every rating was refused, for a reason that will be the same on the next call (the key, the
+                    # account's credit or limits, the request): the runs that are left are not asked for
+                    refused = went_wrong[0]
+                    break
                 continue
             shown = scoring.graded(final, case["question_type"], case["key_points"])
             out.append({
@@ -104,4 +110,4 @@ def check_run(payload: CheckRun, x_admin_key: Optional[str] = Header(default=Non
             })
     after = claude_client.usage()
     # counted across the whole server: if an interview was being scored at the same moment, its calls are in here too
-    return {"case": case["id"], "runs": out, "used": {key: after[key] - before[key] for key in nothing}, "wait_seconds": round(wait), "failures": failures}
+    return {"case": case["id"], "runs": out, "used": {key: after[key] - before[key] for key in nothing}, "wait_seconds": round(wait), "failures": failures, "refused": refused}

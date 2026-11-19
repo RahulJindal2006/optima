@@ -187,8 +187,35 @@ class WhyARatingFailed(unittest.TestCase):
         self.assertIn("(500)", claude_client.why(_status_error(anthropic.InternalServerError, 500)))
         self.assertIn("API key", claude_client.why(_status_error(anthropic.AuthenticationError, 401)))
         self.assertIn("rejected the request (400)", claude_client.why(_status_error(anthropic.BadRequestError, 400)))
+        self.assertIn("billing problem (402)", claude_client.why(_status_error(anthropic.APIStatusError, 402)))
         self.assertIn("spend limit", claude_client.why(_status_error(anthropic.RateLimitError, 429, body={"error": {"details": {"error_code": "enforced_spend_limit_reached"}}})))
         self.assertIn("could not be used", claude_client.why(ValueError("The model stopped early (max_tokens)")))
+
+    def test_a_refusal_carries_what_the_api_itself_said(self):
+        # an example of a message about an account. Whatever the API says is passed on the same way.
+        low = {"type": "error", "error": {"type": "invalid_request_error", "message": "Your credit balance is too low to access the Anthropic API.   Please go to Plans & Billing to upgrade or purchase credits."}}
+        said = claude_client.why(_status_error(anthropic.BadRequestError, 400, body=low))
+        self.assertEqual(said, 'Anthropic rejected the request (400). It said: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."')
+        # a message that does not end its own sentence is closed, so that what the page writes after it reads on
+        self.assertEqual(claude_client.why(_status_error(anthropic.AuthenticationError, 401, body={"error": {"message": "invalid x-api-key"}})),
+                         'Anthropic refused the API key (401). It said: "invalid x-api-key".')
+        long = claude_client.why(_status_error(anthropic.BadRequestError, 400, body={"error": {"message": "x" * 900}}))
+        self.assertLess(len(long), 300)                                   # a long message is cut, not passed on whole
+        self.assertTrue(long.endswith('x…".'), long[-12:])                # and says that it was
+        for nothing in (None, {}, {"error": None}, {"error": {"message": ""}}, {"error": {"message": 7}}, "plain text"):
+            self.assertEqual(claude_client.why(_status_error(anthropic.BadRequestError, 400, body=nothing)), "Anthropic rejected the request (400).")
+
+    def test_the_refusals_are_the_failures_that_trying_again_will_not_cure(self):
+        request = httpx.Request("POST", "https://api.example/v1/messages")
+        cured_by_waiting = [anthropic.APITimeoutError(request=request), anthropic.APIConnectionError(request=request),
+                            _status_error(anthropic.InternalServerError, 500), ValueError("The model returned no text")]
+        not_cured = [_status_error(anthropic.BadRequestError, 400), _status_error(anthropic.AuthenticationError, 401),
+                     _status_error(anthropic.PermissionDeniedError, 403), _status_error(anthropic.APIStatusError, 402),
+                     _status_error(anthropic.RateLimitError, 429, body={"error": {"details": {"error_code": "enforced_spend_limit_reached"}}})]
+        for error in cured_by_waiting:
+            self.assertFalse(claude_client.why(error).startswith(claude_client.REFUSALS), claude_client.why(error))
+        for error in not_cured:
+            self.assertTrue(claude_client.why(error).startswith(claude_client.REFUSALS), claude_client.why(error))
 
     def test_rate_collects_a_sentence_for_each_rating_that_failed_and_none_for_one_that_worked(self):
         calls = iter([ValueError("The model returned no text"), None, ValueError("The model returned no text")])

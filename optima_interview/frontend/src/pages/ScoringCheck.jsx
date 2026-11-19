@@ -119,16 +119,21 @@ function differences(usual, other) {
 }
 
 // The whole result as plain text, to paste somewhere it can be kept or read by someone else.
-function asText({ setup, runs, at, used, cost, results, order, steady, inBand, widest }) {
+function asText({ setup, runs, at, used, cost, results, order, steady, inBand, widest, refused }) {
   const finished = results.filter((r) => r.sum)
   const head = [
     `Optima scoring check${at ? `, ${at}` : ''}`,
     `${setup.model}, rubric ${setup.version}, ${setup.samples} rating${setup.samples === 1 ? '' : 's'} a run, ${runs} runs for each answer`,
     `${count(used.calls)} calls, ${count(used.input_tokens)} tokens in, ${count(used.cached_tokens)} more read from cache, ${count(used.output_tokens)} out` +
       (cost != null ? `, about $${cost.toFixed(2)} at list prices` : ''),
-    `Same score on every run: ${steady} of ${finished.length}. Widest gap: ${tidy(widest)}. Where it should land: ${inBand} of ${finished.length}.` +
-      (order.judged ? ` In order: ${order.held} of ${order.judged} questions.` : ''),
   ]
+  if (refused) head.push(`Stopped at “${refused.at}”: Anthropic refused the calls. ${refused.reason}`)
+  if (finished.length > 0) {
+    head.push(
+      `Same score on every run: ${steady} of ${finished.length}. Widest gap: ${tidy(widest)}. Where it should land: ${inBand} of ${finished.length}.` +
+        (order.judged ? ` In order: ${order.held} of ${order.judged} questions.` : ''),
+    )
+  }
   const blocks = results.map(({ item, sum, row, failed }) => {
     const lines = [`${item.label} [${item.id}], should land ${item.band[0]} to ${item.band[1]}`]
     const why = (row?.why || []).map((reason) => `failed: ${reason}`)
@@ -208,6 +213,7 @@ export default function ScoringCheck() {
   const [state, setState] = useState('idle') // idle | loading | running | done | stopped
   const [waiting, setWaiting] = useState(0) // seconds Claude asked the check to hold off for, while it does
   const [copied, setCopied] = useState({ how: '', text: '' }) // how: '' | done | byhand (the browser would not copy: the text is shown instead)
+  const [refused, setRefused] = useState(null) // { reason, at } when Anthropic refused the calls and the run was stopped for it
   const stop = useRef(false)
 
   const load = async (event) => {
@@ -236,6 +242,7 @@ export default function ScoringCheck() {
     stop.current = false
     setProblem('')
     setCopied({ how: '', text: '' })
+    setRefused(null)
     setRows({})
     setRan({ ids: picked.map((c) => c.id), runs, at: '' })
     setUsed({ calls: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0 })
@@ -252,11 +259,18 @@ export default function ScoringCheck() {
             if (!run) totals[item.id].failed += 1
             else record(totals[item.id], run)
           }
-          totals[item.id].why.push(...(reply.failures || [])) // a sentence for each run that could not be graded
+          // a sentence for each run that could not be graded. The last is left out when it is the refusal that
+          // stopped the run: that one is shown once, at the top of the result.
+          totals[item.id].why.push(...(reply.failures || []).slice(0, reply.refused ? -1 : undefined))
           show()
           setUsed((was) => Object.fromEntries(Object.keys(was).map((k) => [k, was[k] + (reply.used?.[k] || 0)])))
-          // a rate limit says nothing about the grader: wait as long as Claude asked, then carry on with the runs left
-          if (reply.wait_seconds > 0 && !stop.current) {
+          if (reply.refused) {
+            // the key, the account's credit or a limit: the next call would be refused for the same reason,
+            // so nothing more is sent, for this answer or the ones after it
+            setRefused({ reason: reply.refused, at: item.label })
+            stop.current = true
+          } else if (reply.wait_seconds > 0 && !stop.current) {
+            // a rate limit says nothing about the grader: wait as long as Claude asked, then carry on with the runs left
             setWaiting(reply.wait_seconds)
             await pause(reply.wait_seconds * 1000)
             setWaiting(0)
@@ -280,6 +294,7 @@ export default function ScoringCheck() {
     .filter((c) => ran.ids.includes(c.id))
     .map((c) => ({ item: c, row: rows[c.id], sum: summarise(rows[c.id], c.band), failed: rows[c.id]?.failed || 0 }))
   const finished = results.filter((r) => r.sum)
+  const anything = results.some((r) => r.sum || r.failed > 0) // something to show, even if it is only runs that failed
   const steady = finished.filter((r) => r.sum.steady).length
   const inBand = finished.filter((r) => r.sum.inBand).length
   const widest = finished.reduce((gap, r) => Math.max(gap, r.sum.high - r.sum.low), 0)
@@ -288,7 +303,7 @@ export default function ScoringCheck() {
   const busy = state === 'running'
 
   const copy = async () => {
-    const text = asText({ setup, runs: ran.runs, at: ran.at, used, cost, results, order, steady, inBand, widest })
+    const text = asText({ setup, runs: ran.runs, at: ran.at, used, cost, results, order, steady, inBand, widest, refused })
     try {
       await navigator.clipboard.writeText(text)
       setCopied({ how: 'done', text })
@@ -385,7 +400,7 @@ export default function ScoringCheck() {
             </p>
           </section>
 
-          {(busy || finished.length > 0) && (
+          {(busy || anything) && (
             <section className="section">
               <div className="section-head">
                 <h2>{busy ? 'Running' : state === 'done' ? 'Result' : 'Stopped part-way'}</h2>
@@ -400,6 +415,15 @@ export default function ScoringCheck() {
                 <p className="hint" role="status">
                   Claude asked for a pause (a rate limit). Carrying on in {waiting} seconds. Nothing is lost.
                 </p>
+              )}
+
+              {refused && (
+                <div className="check-stopped">
+                  <Notice tone="stop" title="Anthropic refused the calls, so the run stopped.">
+                    {refused.reason} It stopped at “{refused.at}”. Nothing more was sent
+                    {finished.length > 0 ? ', and the scores already here stand.' : '.'}
+                  </Notice>
+                </div>
               )}
 
               {finished.length > 0 && (
@@ -439,7 +463,7 @@ export default function ScoringCheck() {
                 </Notice>
               )}
 
-              {finished.length > 0 && !busy && (
+              {anything && !busy && (
                 <div className="check-copy">
                   <button type="button" className="btn secondary sm" onClick={copy}>
                     Copy the result as text

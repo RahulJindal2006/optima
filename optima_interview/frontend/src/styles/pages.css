@@ -1444,6 +1444,11 @@ a.sheet-main:hover .sheet-who strong {
   margin-bottom: 20px;
 }
 
+/* the refusal that stopped a run, above whatever the run did get */
+.check-stopped {
+  margin-bottom: 20px;
+}
+
 .check-sum > div {
   display: flex;
   flex-wrap: wrap;

@@ -94,21 +94,43 @@ def _spend_cap(err: Exception) -> bool:
     return isinstance(details, dict) and details.get("error_code") == "enforced_spend_limit_reached"
 
 
+# How the sentences below begin when the call was refused for a reason that will be the same on the next
+# call: the key, the account's credit or limits, or the request itself. Trying again will not help.
+REFUSALS = ("Anthropic rejected the request", "Anthropic refused the API key", "Anthropic reported a billing problem", "The Anthropic account has reached its spend limit")
+
+
+def _its_words(err: Exception) -> str:
+    """What the API itself said about an error, shortened. A status code says only that a call was refused;
+    the message can say why (the account's credit, a limit, the key). Shown to the site's owner only."""
+    body = getattr(err, "body", None)
+    error = body.get("error") if isinstance(body, dict) else None
+    text = error.get("message") if isinstance(error, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        return ""
+    text = " ".join(text.split())
+    if len(text) > 240:
+        text = text[:240].rstrip() + "…"
+    # closed as a sentence either way, so that whatever is written after it reads on
+    return f' It said: "{text}"' + ("" if text.endswith((".", "!", "?")) else ".")
+
+
 def why(err: Exception) -> str:
-    """One plain sentence for why a call to Claude gave nothing back, for the owner's check to show."""
+    """One or two plain sentences for why a call to Claude gave nothing back, for the owner's check to show."""
     if isinstance(err, anthropic.APITimeoutError):
         return f"Claude did not answer within {SCORE_SECONDS:g} seconds, twice."
     if isinstance(err, anthropic.APIConnectionError):
         return "The connection to Claude failed, twice."
     if isinstance(err, anthropic.RateLimitError):
-        return "The Anthropic account has reached its spend limit." if _spend_cap(err) else "Claude's rate limit was reached."
+        return "The Anthropic account has reached its spend limit." + _its_words(err) if _spend_cap(err) else "Claude's rate limit was reached."
     if isinstance(err, anthropic.APIStatusError):
         status = getattr(err, "status_code", 0) or 0
         if status in (401, 403):
-            return f"Claude refused the API key ({status})."
+            return f"Anthropic refused the API key ({status})." + _its_words(err)
+        if status == 402:
+            return "Anthropic reported a billing problem (402)." + _its_words(err)
         if status >= 500:
             return f"Claude's service returned an error ({status}), twice."
-        return f"Claude rejected the request ({status})."
+        return f"Anthropic rejected the request ({status})." + _its_words(err)
     if isinstance(err, ValueError):
         text = " ".join(str(err).split())[:120]
         return f"The reply could not be used: {text}."

@@ -183,7 +183,9 @@ that cannot be rated is left out and counted, not guessed.
   of that quality should. For each question it shows whether the better answers always scored higher. Behind
   each score it shows the scorecard the grader gave, and which lines changed on the runs that came out
   differently. The whole result can be copied as text. This is the one that tells you how steady the real
-  model is.
+  model is. If Anthropic refuses the calls (a key it does not accept, an account that cannot pay, a spend
+  limit that has been reached), the check stops at the first refused run, sends nothing more, and shows what
+  the API said.
 
 The reference answers (`backend/reference_answers.py`, all invented) are four questions with five answers
 each, labelled with the band each belongs in: two that are really good (one with figures and one without), one
@@ -312,9 +314,34 @@ the grader to read real code as its language runs it did not change that. In `20
 write out what the solution returns for a real input before it picks any level, the same way it has to quote a
 figure before it can give the top level for evidence.
 
-Not measured: anything at all on rubric `2026.11-d` (run `/scoring-check` again), 100 fresh gradings of one
-answer on the real model, and whether the grader's levels land where a recruiter's would. That last one needs
-people reading graded answers against the level descriptions.
+The first run on rubric `2026.11-d` (19 November 2026, all 25 answers ticked, five runs each) stopped being
+graded part-way: 222 calls and $0.88 in, Anthropic's API began refusing every call with a 400. Sixteen answers
+had been graded by then:
+
+| | |
+|---|---|
+| Landed inside the band for their quality | 16 of 16 |
+| Answers given the same score on every run | 13 of 16 |
+| Widest gap between two runs of one answer | 11.8 points |
+| Questions whose answers came out in order | 3 of 3 |
+| Really good, with figures | 100; 100; 95.6 four times with 100 once |
+| Really good, no figures | 92.5; 88.1 on four runs; and one that moved between 76.3 and 88.1 |
+| Good | 63.2; and one that moved between 63.2 and 71.9 |
+| Bad | 20 on all five runs, for both vague answers: the floor |
+| Really bad | 0 on every run: off the subject, both lists of words, instructing the grader, blank |
+
+So the two changes that could be seen did what they were for. A vague answer now scores 20, at the bottom of
+the band for a bad answer and not under it, and a list of terms scores 0 every time, where it had scored
+anything from 0 to 17.6.
+
+The other nine answers got no grade at all: the last three for the marketing question and all six pieces of
+code. That includes the one this rubric was changed for, the code that leans on dictionary order. The check
+went on asking to the end, and recorded only "rejected the request (400)" for each of the 46 runs that were
+refused. It did not keep what the API said, so the run does not show why. It keeps that now, and stops.
+
+Not measured: on rubric `2026.11-d`, the three marketing answers below "really good" and every coding answer;
+100 fresh gradings of one answer on the real model; and whether the grader's levels land where a recruiter's
+would. That last one needs people reading graded answers against the level descriptions.
 
 ## Settings
 
